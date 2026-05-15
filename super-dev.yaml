@@ -1,0 +1,54 @@
+project:
+  id: salem-1692
+  name: Salem 1692 Online Board Game
+  domain: game
+  platform: web
+  language: zh-CN
+
+super_dev:
+  version: "2.4.0"
+  mode: standard
+  phase_chain:
+    - research
+    - docs
+    - docs_confirm
+    - spec
+    - frontend
+    - preview_confirm
+    - backend
+    - quality
+    - delivery
+  current_phase: spec
+  docs_confirm_required: true
+  preview_confirm_required: true
+  host_parity_required: true
+
+stack:
+  frontend:
+    framework: react
+    bundler: vite
+    styling: tailwindcss
+    icons: lucide-react
+    animation: framer-motion
+  backend:
+    runtime: node
+    framework: colyseus
+    realtime_voice: livekit
+  language:
+    primary: typescript
+
+artifacts:
+  research: output/salem-research.md
+  prd: output/salem-prd.md
+  architecture: output/salem-architecture.md
+  uiux: output/salem-uiux.md
+  execution_plan: output/salem-execution-plan.md
+  knowledge:
+    - knowledge/salem-1692-rules.md
+
+quality_gates:
+  no_emoji_icons: true
+  official_docs_when_unsure: true
+  frontend_build_required: true
+  backend_build_required: true
+  runtime_smoke_required: true

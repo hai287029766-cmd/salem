@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>Salem 1692 - 女巫镇</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Noto+Serif+SC:wght@400;700&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0c0907;
+            --bg-parchment: #1c1612;
+            --bg-card: #181410;
+            --bg-card-folded: #14100c;
+            --accent-gold: #b8943f;
+            --accent-wax: #8b1a1a;
+            --accent-wax-bright: #a82020;
+            --accent-ink: #2a1f15;
+            --accent-rope: #6b4e2a;
+            --accent-rope-knot: #a07040;
+            --text-parchment: #c4b49c;
+            --text-ink: #8a7a6a;
+            --text-bright: #e8ddd0;
+            --witch-mark: #5a3060;
+            --villager-mark: #3a5060;
+            --border-wax: rgba(139, 26, 26, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        body {
+            background: var(--bg-dark);
+            color: var(--text-parchment);
+            font-family: 'Noto Serif SC', 'IM Fell English', serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* 羊皮纸纹理背景 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(ellipse at 20% 30%, rgba(139, 26, 26, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 70%, rgba(90, 48, 96, 0.04) 0%, transparent 50%),
+                url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .game-container {
+            position: relative;
+            z-index: 1;
+            max-width: 430px;
+            margin: 0 auto;
+            padding: 12px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding-bottom: 80px;
+        }
+
+        /* ===== 顶部：火漆印章轮次 ===== */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 4px 16px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid rgba(184, 148, 63, 0.15);
+        }
+
+        .wax-seal {
+            position: relative;
+            width: 64px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .wax-seal::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, var(--accent-wax-bright), var(--accent-wax));
+            box-shadow: 
+                0 2px 8px rgba(139, 26, 26, 0.4),
+                inset 0 -2px 4px rgba(0,0,0,0.3),
+                inset 0 2px 4px rgba(255,255,255,0.1);
+        }
+
+        .wax-seal::after {
+            content: '';
+            position: absolute;
+            inset: 6px;
+            border-radius: 50%;
+            border: 2px solid rgba(184, 148, 63, 0.3);
+        }
+
+        .wax-text {
+            position: relative;
+            z-index: 2;
+            font-family: 'Cinzel', serif;
+            font-size: 11px;
+            font-weight: 900;
+            color: var(--accent-gold);
+            text-align: center;
+            line-height: 1.2;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .wax-text .round-num {
+            font-size: 18px;
+            display: block;
+        }
+
+        .phase-info {
+            text-align: right;
+        }
+
+        .phase-name {
+            font-family: 'Cinzel', serif;
+            font-size: 16px;
+            color: var(--accent-gold);
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+
+        .phase-sub {
+            font-size: 11px;
+            color: var(--text-ink);
+            font-style: italic;
+        }
+
+        .timer {
+            font-family: 'Cinzel', serif;
+            font-size: 20px;
+            color: var(--accent-gold);
+            text-shadow: 0 0 12px rgba(184, 148, 63, 0.3);
+            letter-spacing: 2px;
+        }
+
+        /* ===== 玩家列表：手风琴折叠 ===== */
+        .players-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .player-card {
+            background: linear-gradient(180deg, var(--bg-card) 0%, rgba(20, 16, 12, 0.98) 100%);
+            border: 1px solid rgba(184, 148, 63, 0.1);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .player-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(184, 148, 63, 0.2), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .player-card.active-turn::before {
+            opacity: 1;
+        }
+
+        .player-card.active-turn {
+            border-color: rgba(184, 148, 63, 0.3);
+            box-shadow: 0 0 16px rgba(184, 148, 63, 0.08);
+        }
+
+        .player-card.me {
+            border-color: rgba(184, 148, 63, 0.25);
+            background: linear-gradient(180deg, #1e1814 0%, rgba(20, 16, 12, 0.98) 100%);
+        }
+
+        /* 折叠状态头部 */
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            cursor: pointer;
+            position: relative;
+            min-height: 56px;
+        }
+
+        .card-header:active {
+            background: rgba(184, 148, 63, 0.05);
+        }
+
+        /* 木刻肖像 */
+        .portrait {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            position: relative;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #2a2018, #1a1410);
+            border: 2px solid rgba(184, 148, 63, 0.2);
+            overflow: hidden;
+        }
+
+        .portrait::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='w'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.05' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23w)' opacity='0.3'/%3E%3C/svg%3E");
+            mix-blend-mode: overlay;
+            pointer-events: none;
+        }
+
+        .portrait-icon {
+            font-size: 24px;
+            filter: sepia(0.6) contrast(1.2) brightness(0.9);
+            z-index: 1;
+        }
+
+        .player-card.active-turn .portrait {
+            border-color: var(--accent-gold);
+            box-shadow: 0 0 12px rgba(184, 148, 63, 0.2);
+        }
+
+        .player-card.active-turn .portrait-icon {
+            filter: sepia(0.3) contrast(1.3) brightness(1);
+        }
+
+        /* 玩家名区 */
+        .name-block {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .player-nickname {
+            font-family: 'Cinzel', serif;
+            font-size: 15px;
+            color: var(--text-bright);
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .player-realname {
+            font-size: 11px;
+            color: var(--text-ink);
+            font-style: italic;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .player-card.me .player-nickname::after {
+            content: ' · 我';
+            color: var(--accent-gold);
+            font-size: 12px;
+        }
+
+        /* 火漆信封身份条（折叠态） */
+        .identity-strip {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .wax-envelope {
+            width: 20px;
+            height: 26px;
+            border-radius: 3px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.3s;
+        }
+
+        .wax-envelope.sealed {
+            background: linear-gradient(180deg, #3a2820, #2a1a12);
+            border: 1px solid rgba(139, 26, 26, 0.4);
+        }
+
+        .wax-envelope.sealed::before {
+            content: '';
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, var(--accent-wax-bright), var(--accent-wax));
+            box-shadow: 0 1px 3px rgba(139, 26, 26, 0.5);
+        }
+
+        .wax-envelope.sealed::after {
+            content: '';
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            border: 1px solid rgba(184, 148, 63, 0.4);
+        }
+
+        .wax-envelope.broken-villager {
+            background: linear-gradient(180deg, rgba(58, 80, 96, 0.3), rgba(38, 55, 70, 0.2));
+            border: 1px solid rgba(100, 160, 200, 0.3);
+        }
+
+        .wax-envelope.broken-witch {
+            background: linear-gradient(180deg, rgba(90, 48, 96, 0.3), rgba(60, 30, 70, 0.2));
+            border: 1px solid rgba(180, 100, 200, 0.3);
+        }
+
+        .wax-envelope.broken-villager .env-content,
+        .wax-envelope.broken-witch .env-content {
+            font-size: 14px;
+            z-index: 2;
+            position: relative;
+        }
+
+        .wax-envelope.broken-villager .env-content { color: #90c0e0; }
+        .wax-envelope.broken-witch .env-content { color: #c090e0; }
+
+        /* 麻绳指控进度（折叠态） */
+        .rope-track-compact {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            margin-left: 4px;
+        }
+
+        .rope-knot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-rope);
+            border: 1px solid rgba(160, 112, 64, 0.5);
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .rope-knot.tied {
+            background: var(--accent-rope-knot);
+            box-shadow: 0 0 6px rgba(160, 112, 64, 0.4);
+            transform: scale(1.2);
+        }
+
+        .rope-knot.tied::after {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: 50%;
+            border: 1px solid rgba(160, 112, 64, 0.3);
+        }
+
+        .gallows-hook-compact {
+            font-size: 16px;
+            margin-left: 2px;
+            opacity: 0.2;
+            transition: all 0.3s;
+        }
+
+        .rope-track-compact.danger .gallows-hook-compact {
+            opacity: 1;
+            animation: hookSwing 2s ease-in-out infinite;
+            transform-origin: top center;
+        }
+
+        @keyframes hookSwing {
+            0%, 100% { transform: rotate(-8deg); }
+            50% { transform: rotate(8deg); }
+        }
+
+        /* 展开箭头 */
+        .expand-arrow {
+            font-size: 12px;
+            color: var(--text-ink);
+            transition: transform 0.3s;
+            margin-left: 4px;
+        }
+
+        .player-card.expanded .expand-arrow {
+            transform: rotate(180deg);
+        }
+
+        /* 展开内容区 */
+        .card-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+            opacity: 0;
+            padding: 0 14px;
+        }
+
+        .player-card.expanded .card-body {
+            max-height: 400px;
+            opacity: 1;
+            padding: 0 14px 14px;
+        }
+
+        /* 角色技能卷轴 */
+        .skill-scroll {
+            background: linear-gradient(180deg, rgba(42, 31, 21, 0.6), rgba(28, 22, 18, 0.4));
+            border: 1px solid rgba(184, 148, 63, 0.15);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .scroll-icon {
+            font-size: 18px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .scroll-content {
+            flex: 1;
+        }
+
+        .scroll-title {
+            font-family: 'Cinzel', serif;
+            font-size: 12px;
+            color: var(--accent-gold);
+            margin-bottom: 2px;
+        }
+
+        .scroll-desc {
+            font-size: 11px;
+            color: var(--text-ink);
+            line-height: 1.5;
+        }
+
+        /* 详细身份区 */
+        .identity-detail {
+            margin-bottom: 12px;
+        }
+
+        .section-label {
+            font-size: 10px;
+            color: var(--text-ink);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .envelope-row {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .envelope-large {
+            width: 48px;
+            height: 64px;
+            border-radius: 6px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.4s;
+        }
+
+        .envelope-large.sealed {
+            background: linear-gradient(180deg, #3a2820, #2a1a12);
+            border: 1px solid rgba(139, 26, 26, 0.4);
+            box-shadow: inset 0 1px 2px rgba(255,255,255,0.05);
+        }
+
+        .envelope-large.sealed .env-wax {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, var(--accent-wax-bright), var(--accent-wax));
+            box-shadow: 0 2px 6px rgba(139, 26, 26, 0.4), inset 0 -1px 2px rgba(0,0,0,0.3);
+            position: relative;
+        }
+
+        .envelope-large.sealed .env-wax::after {
+            content: '';
+            position: absolute;
+            inset: 3px;
+            border-radius: 50%;
+            border: 1px solid rgba(184, 148, 63, 0.3);
+        }
+
+        .envelope-large.sealed .env-num {
+            position: absolute;
+            bottom: 4px;
+            font-size: 10px;
+            color: var(--text-ink);
+            opacity: 0.6;
+        }
+
+        .envelope-large.broken-villager {
+            background: linear-gradient(180deg, rgba(58, 80, 96, 0.25), rgba(38, 55, 70, 0.15));
+            border: 1px solid rgba(100, 160, 200, 0.3);
+            animation: revealPulse 0.6s ease;
+        }
+
+        .envelope-large.broken-witch {
+            background: linear-gradient(180deg, rgba(90, 48, 96, 0.25), rgba(60, 30, 70, 0.15));
+            border: 1px solid rgba(180, 100, 200, 0.3);
+            animation: revealPulse 0.6s ease;
+        }
+
+        @keyframes revealPulse {
+            0% { transform: scale(0.8); opacity: 0; }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .envelope-large.broken-villager .env-role,
+        .envelope-large.broken-witch .env-role {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        .envelope-large.broken-villager .env-label,
+        .envelope-large.broken-witch .env-label {
+            font-size: 10px;
+            letter-spacing: 1px;
+        }
+
+        .envelope-large.broken-villager .env-label { color: #90c0e0; }
+        .envelope-large.broken-witch .env-label { color: #c090e0; }
+
+        /* 麻绳指控详情 */
+        .rope-detail {
+            margin-bottom: 12px;
+        }
+
+        .rope-bar {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            height: 32px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            padding: 0 8px;
+            position: relative;
+        }
+
+        .rope-segment {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(180deg, var(--accent-rope), #4a3520);
+            position: relative;
+            transition: all 0.4s;
+        }
+
+        .rope-segment.untied {
+            opacity: 0.3;
+            background: linear-gradient(180deg, #3a2a1a, #2a1a10);
+        }
+
+        .rope-segment.tied {
+            background: linear-gradient(180deg, var(--accent-rope-knot), var(--accent-rope));
+            box-shadow: 0 0 8px rgba(160, 112, 64, 0.3);
+        }
+
+        .rope-segment.tied::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, var(--accent-rope-knot), var(--accent-rope));
+            border: 1px solid rgba(200, 160, 100, 0.4);
+            box-shadow: 0 0 6px rgba(160, 112, 64, 0.4);
+        }
+
+        .gallows-hook {
+            font-size: 22px;
+            margin-left: 4px;
+            opacity: 0.15;
+            transition: all 0.3s;
+        }
+
+        .rope-bar.danger .gallows-hook {
+            opacity: 1;
+            animation: hookSwingLarge 2.5s ease-in-out infinite;
+            filter: drop-shadow(0 0 8px rgba(160, 112, 64, 0.5));
+        }
+
+        @keyframes hookSwingLarge {
+            0%, 100% { transform: rotate(-10deg) translateY(0); }
+            25% { transform: rotate(5deg) translateY(-2px); }
+            50% { transform: rotate(10deg) translateY(0); }
+            75% { transform: rotate(-5deg) translateY(-1px); }
+        }
+
+        /* 数值区 */
+        .stats-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .stat-pill {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.25);
+            border-radius: 8px;
+            border: 1px solid rgba(184, 148, 63, 0.1);
+        }
+
+        .stat-icon {
+            font-size: 16px;
+            opacity: 0.7;
+        }
+
+        .stat-value {
+            font-family: 'Cinzel', serif;
+            font-size: 20px;
+            color: var(--accent-gold);
+        }
+
+        .stat-label {
+            font-size: 10px;
+            color: var(--text-ink);
+            margin-left: 2px;
+        }
+
+        /* 底部导航 */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            max-width: 430px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0 24px;
+            background: linear-gradient(180deg, transparent, rgba(12, 9, 7, 0.95) 30%);
+            backdrop-filter: blur(8px);
+            border-top: 1px solid rgba(184, 148, 63, 0.1);
+            z-index: 100;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            padding: 6px 14px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .nav-item.active {
+            background: rgba(184, 148, 63, 0.1);
+        }
+
+        .nav-icon {
+            font-size: 22px;
+            opacity: 0.5;
+            transition: all 0.2s;
+        }
+
+        .nav-item.active .nav-icon {
+            opacity: 1;
+            filter: drop-shadow(0 0 6px rgba(184, 148, 63, 0.4));
+        }
+
+        .nav-label {
+            font-size: 9px;
+            color: var(--text-ink);
+            letter-spacing: 1px;
+            font-family: 'Cinzel', serif;
+        }
+
+        .nav-item.active .nav-label {
+            color: var(--accent-gold);
+        }
+
+        /* 当前回合脉冲指示 */
+        .turn-pulse {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-gold);
+            box-shadow: 0 0 8px var(--accent-gold);
+            animation: turnPulse 2s infinite;
+            display: none;
+        }
+
+        .player-card.active-turn .turn-pulse {
+            display: block;
+        }
+
+        @keyframes turnPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.6); }
+        }
+
+        /* 响应式 */
+        @media (max-height: 700px) {
+            .card-header { padding: 10px 12px; min-height: 48px; }
+            .portrait { width: 38px; height: 38px; }
+            .portrait-icon { font-size: 20px; }
+            .player-nickname { font-size: 14px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- 顶部火漆印章 -->
+        <div class="top-bar">
+            <div class="wax-seal">
+                <div class="wax-text">
+                    <span class="round-num">3</span>
+                    <span style="font-size:9px">轮</span>
+                </div>
+            </div>
+            <div class="phase-info">
+                <div class="phase-name">审判日</div>
+                <div class="phase-sub">Daylight · 白天</div>
+            </div>
+            <div class="timer">00:22</div>
+        </div>
+
+        <!-- 玩家列表 -->
+        <div class="players-list">
+
+            <!-- 玩家1: 阿斯顿发（当前回合） -->
+            <div class="player-card active-turn" data-player="0">
+                <div class="turn-pulse"></div>
+                <div class="card-header" onclick="toggleCard(this)">
+                    <div class="portrait">
+                        <span class="portrait-icon">🎩</span>
+                    </div>
+                    <div class="name-block">
+                        <div class="player-nickname">阿斯顿发</div>
+                        <div class="player-realname">约翰·普罗克特</div>
+                    </div>
+                    <div class="identity-strip">
+                        <div class="wax-envelope broken-villager"><span class="env-content">👤</span></div>
+                        <div class="wax-envelope broken-villager"><span class="env-content">👤</span></div>
+                        <div class="wax-envelope sealed"></div>
+                        <div class="wax-envelope sealed"></div>
+                        <div class="wax-envelope sealed"></div>
+                    </div>
+                    <div class="rope-track-compact">
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <span class="gallows-hook-compact">🪝</span>
+                    </div>
+                    <div class="expand-arrow">▼</div>
+                </div>
+                <div class="card-body">
+                    <!-- 角色技能 -->
+                    <div class="skill-scroll">
+                        <span class="scroll-icon">📜</span>
+                        <div class="scroll-content">
+                            <div class="scroll-title">约翰·普罗克特</div>
+                            <div class="scroll-desc">若你被指控，可立即翻开一张身份卡。若为村民，指控者获得2张女巫牌。</div>
+                        </div>
+                    </div>
+                    <!-- 详细身份 -->
+                    <div class="identity-detail">
+                        <div class="section-label">⚜ 身份封印</div>
+                        <div class="envelope-row">
+                            <div class="envelope-large broken-villager">
+                                <span class="env-role">👤</span>
+                                <span class="env-label">村民</span>
+                            </div>
+                            <div class="envelope-large broken-villager">
+                                <span class="env-role">👤</span>
+                                <span class="env-label">村民</span>
+                            </div>
+                            <div class="envelope-large sealed">
+                                <div class="env-wax"></div>
+                                <span class="env-num">3</span>
+                            </div>
+                            <div class="envelope-large sealed">
+                                <div class="env-wax"></div>
+                                <span class="env-num">4</span>
+                            </div>
+                            <div class="envelope-large sealed">
+                                <div class="env-wax"></div>
+                                <span class="env-num">5</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 麻绳指控 -->
+                    <div class="rope-detail">
+                        <div class="section-label">🕯 审判之火 · 0/7</div>
+                        <div class="rope-bar">
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <span class="gallows-hook">🪝</span>
+                        </div>
+                    </div>
+                    <!-- 数值 -->
+                    <div class="stats-row">
+                        <div class="stat-pill">
+                            <span class="stat-icon">🃏</span>
+                            <span class="stat-value">0</span>
+                            <span class="stat-label">手牌</span>
+                        </div>
+                        <div class="stat-pill">
+                            <span class="stat-icon">⚖️</span>
+                            <span class="stat-value">0</span>
+                            <span class="stat-label">指控</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 玩家2: 大叔 -->
+            <div class="player-card" data-player="1">
+                <div class="card-header" onclick="toggleCard(this)">
+                    <div class="portrait">
+                        <span class="portrait-icon">👴</span>
+                    </div>
+                    <div class="name-block">
+                        <div class="player-nickname">大叔</div>
+                        <div class="player-realname">托马斯·丹福斯</div>
+                    </div>
+                    <div class="identity-strip">
+                        <div class="wax-envelope broken-villager"><span class="env-content">👤</span></div>
+                        <div class="wax-envelope broken-witch"><span class="env-content">🧙</span></div>
+                        <div class="wax-envelope sealed"></div>
+                        <div class="wax-envelope sealed"></div>
+                        <div class="wax-envelope sealed"></div>
+                    </div>
+                    <div class="rope-track-compact">
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <span class="gallows-hook-compact">🪝</span>
+                    </div>
+                    <div class="expand-arrow">▼</div>
+                </div>
+                <div class="card-body">
+                    <div class="skill-scroll">
+                        <span class="scroll-icon">📜</span>
+                        <div class="scroll-content">
+                            <div class="scroll-title">托马斯·丹福斯</div>
+                            <div class="scroll-desc">法官身份：每轮可查看一名玩家的最左侧未翻开身份。</div>
+                        </div>
+                    </div>
+                    <div class="identity-detail">
+                        <div class="section-label">⚜ 身份封印</div>
+                        <div class="envelope-row">
+                            <div class="envelope-large broken-villager">
+                                <span class="env-role">👤</span>
+                                <span class="env-label">村民</span>
+                            </div>
+                            <div class="envelope-large broken-witch">
+                                <span class="env-role">🧙</span>
+                                <span class="env-label">女巫</span>
+                            </div>
+                            <div class="envelope-large sealed">
+                                <div class="env-wax"></div>
+                                <span class="env-num">3</span>
+                            </div>
+                            <div class="envelope-large sealed">
+                                <div class="env-wax"></div>
+                                <span class="env-num">4</span>
+                            </div>
+                            <div class="envelope-large sealed">
+                                <div class="env-wax"></div>
+                                <span class="env-num">5</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rope-detail">
+                        <div class="section-label">🕯 审判之火 · 0/7</div>
+                        <div class="rope-bar">
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <span class="gallows-hook">🪝</span>
+                        </div>
+                    </div>
+                    <div class="stats-row">
+                        <div class="stat-pill">
+                            <span class="stat-icon">🃏</span>
+                            <span class="stat-value">0</span>
+                            <span class="stat-label">手牌</span>
+                        </div>
+                        <div class="stat-pill">
+                            <span class="stat-icon">⚖️</span>
+                            <span class="stat-value">0</span>
+                            <span class="stat-label">指控</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 玩家3: 哪个是否改变v说 -->
+            <div class="player-card" data-player="2">
+                <div class="card-header" onclick="toggleCard(this)">
+                    <div class="portrait">
+                        <span class="portrait-icon">🐈‍⬛</span>
+                    </div>
+                    <div class="name-block">
+                        <div class="player-nickname">哪个是否改变v说</div>
+                        <div class="player-realname">威尔·格里格斯</div>
+                    </div>
+                    <div class="identity-strip">
+                        <div class="wax-envelope broken-witch"><span class="env-content">🧙</span></div>
+                        <div class="wax-envelope sealed"></div>
+                        <div class="wax-envelope sealed"></div>
+                        <div class="wax-envelope sealed"></div>
+                        <div class="wax-envelope sealed"></div>
+                    </div>
+                    <div class="rope-track-compact">
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <span class="gallows-hook-compact">🪝</span>
+                    </div>
+                    <div class="expand-arrow">▼</div>
+                </div>
+                <div class="card-body">
+                    <div class="skill-scroll">
+                        <span class="scroll-icon">📜</span>
+                        <div class="scroll-content">
+                            <div class="scroll-title">威尔·格里格斯</div>
+                            <div class="scroll-desc">黑猫之主：当你被指控时，可强制另一名玩家替你承受1点指控。</div>
+                        </div>
+                    </div>
+                    <div class="identity-detail">
+                        <div class="section-label">⚜ 身份封印</div>
+                        <div class="envelope-row">
+                            <div class="envelope-large broken-witch">
+                                <span class="env-role">🧙</span>
+                                <span class="env-label">女巫</span>
+                            </div>
+                            <div class="envelope-large sealed">
+                                <div class="env-wax"></div>
+                                <span class="env-num">2</span>
+                            </div>
+                            <div class="envelope-large sealed">
+                                <div class="env-wax"></div>
+                                <span class="env-num">3</span>
+                            </div>
+                            <div class="envelope-large sealed">
+                                <div class="env-wax"></div>
+                                <span class="env-num">4</span>
+                            </div>
+                            <div class="envelope-large sealed">
+                                <div class="env-wax"></div>
+                                <span class="env-num">5</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rope-detail">
+                        <div class="section-label">🕯 审判之火 · 0/7</div>
+                        <div class="rope-bar">
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <span class="gallows-hook">🪝</span>
+                        </div>
+                    </div>
+                    <div class="stats-row">
+                        <div class="stat-pill">
+                            <span class="stat-icon">🃏</span>
+                            <span class="stat-value">0</span>
+                            <span class="stat-label">手牌</span>
+                        </div>
+                        <div class="stat-pill">
+                            <span class="stat-icon">⚖️</span>
+                            <span class="stat-value">0</span>
+                            <span class="stat-label">指控</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 玩家4: 当然同意（我） -->
+            <div class="player-card me" data-player="3">
+                <div class="card-header" onclick="toggleCard(this)">
+                    <div class="portrait">
+                        <span class="portrait-icon">🧔</span>
+                    </div>
+                    <div class="name-block">
+                        <div class="player-nickname">当然同意</div>
+                        <div class="player-realname">乔治·巴勒斯</div>
+                    </div>
+                    <div class="identity-strip">
+                        <div class="wax-envelope sealed"></div>
+                        <div class="wax-envelope sealed"></div>
+                        <div class="wax-envelope sealed"></div>
+                        <div class="wax-envelope sealed"></div>
+                        <div class="wax-envelope sealed"></div>
+                    </div>
+                    <div class="rope-track-compact">
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <div class="rope-knot"></div>
+                        <span class="gallows-hook-compact">🪝</span>
+                    </div>
+                    <div class="expand-arrow">▼</div>
+                </div>
+                <div class="card-body">
+                    <div class="skill-scroll">
+                        <span class="scroll-icon">📜</span>
+                        <div class="scroll-content">
+                            <div class="scroll-title">乔治·巴勒斯</div>
+                            <div class="scroll-desc">牧师：每轮可保护一名玩家，使其本轮不受指控影响。</div>
+                        </div>
+                    </div>
+                    <div class="identity-detail">
+                        <div class="section-label">⚜ 身份封印</div>
+                        <div class="envelope-row">
+                            <div class="envelope-large sealed">
+                                <div class="env-wax"></div>
+                                <span class="env-num">1</span>
+                            </div>
+                            <div class="envelope-large sealed">
+                                <div class="env-wax"></div>
+                                <span class="env-num">2</span>
+                            </div>
+                            <div class="envelope-large sealed">
+                                <div class="env-wax"></div>
+                                <span class="env-num">3</span>
+                            </div>
+                            <div class="envelope-large sealed">
+                                <div class="env-wax"></div>
+                                <span class="env-num">4</span>
+                            </div>
+                            <div class="envelope-large sealed">
+                                <div class="env-wax"></div>
+                                <span class="env-num">5</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rope-detail">
+                        <div class="section-label">🕯 审判之火 · 0/7</div>
+                        <div class="rope-bar">
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <div class="rope-segment untied"></div>
+                            <span class="gallows-hook">🪝</span>
+                        </div>
+                    </div>
+                    <div class="stats-row">
+                        <div class="stat-pill">
+                            <span class="stat-icon">🃏</span>
+                            <span class="stat-value">0</span>
+                            <span class="stat-label">手牌</span>
+                        </div>
+                        <div class="stat-pill">
+                            <span class="stat-icon">⚖️</span>
+                            <span class="stat-value">0</span>
+                            <span class="stat-label">指控</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 底部导航 -->
+        <div class="bottom-nav">
+            <div class="nav-item active">
+                <span class="nav-icon">👥</span>
+                <span class="nav-label">PLAYER</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">🃏</span>
+                <span class="nav-label">HAND</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">⚖️</span>
+                <span class="nav-label">TRIAL</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">📜</span>
+                <span class="nav-label">LOG</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleCard(header) {
+            const card = header.closest('.player-card');
+            const wasExpanded = card.classList.contains('expanded');
+
+            // 关闭所有其他卡片
+            document.querySelectorAll('.player-card.expanded').forEach(c => {
+                if (c !== card) c.classList.remove('expanded');
+            });
+
+            // 切换当前卡片
+            card.classList.toggle('expanded');
+
+            // 滚动到视图
+            if (!wasExpanded) {
+                setTimeout(() => {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            }
+        }
+
+        // 初始化：默认展开当前回合玩家
+        document.addEventListener('DOMContentLoaded', () => {
+            const activeCard = document.querySelector('.player-card.active-turn');
+            if (activeCard) activeCard.classList.add('expanded');
+        });
+    </script>
+</body>
+</html>

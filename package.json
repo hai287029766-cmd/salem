@@ -1,0 +1,16 @@
+{
+  "name": "salem-1692",
+  "private": true,
+  "scripts": {
+    "dev:server": "cd packages/server && npm run dev",
+    "dev:client": "cd packages/client && npm run dev",
+    "build:server": "cd packages/server && npm run build",
+    "build:client": "cd packages/client && npm run build",
+    "build": "npm run build:server && npm run build:client",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0"
+  }
+}

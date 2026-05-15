@@ -1,0 +1,45 @@
+{
+  "name": "super-dev-codex",
+  "version": "2.4.0",
+  "description": "Super Dev workflow entries for Codex App/Desktop.",
+  "author": {
+    "name": "Super Dev",
+    "email": "",
+    "url": ""
+  },
+  "homepage": "",
+  "repository": "",
+  "license": "MIT",
+  "keywords": [
+    "super-dev",
+    "ai-coding",
+    "workflow",
+    "codex",
+    "spec",
+    "quality"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Super Dev",
+    "shortDescription": "Enter or resume the Super Dev AI coding workflow.",
+    "longDescription": "Adds Super Dev and SEEAI workflow entries for Codex App/Desktop, with research-first docs, confirmation gates, Spec/tasks, frontend-first implementation, quality gates, and delivery evidence.",
+    "developerName": "Super Dev",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "",
+    "privacyPolicyURL": "",
+    "termsOfServiceURL": "",
+    "defaultPrompt": [
+      "/super-dev 继续当前流程"
+    ],
+    "brandColor": "#1a1410",
+    "composerIcon": "",
+    "logo": "",
+    "screenshots": []
+  }
+}
+
