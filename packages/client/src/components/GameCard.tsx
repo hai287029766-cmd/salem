@@ -1,6 +1,5 @@
 import { CARD_DEFINITIONS } from "@salem/shared";
 import type { CardType, CardColor } from "@salem/shared";
-import { CARD_IMAGE_SOURCES } from "../assets/cardAssets";
 
 interface GameCardProps {
   cardType: CardType;
@@ -11,71 +10,61 @@ interface GameCardProps {
 }
 
 const COLOR_BORDERS: Record<CardColor, string> = {
-  red: "border-salem-accent-red",
-  green: "border-salem-accent-green",
-  blue: "border-salem-accent-blue",
-  black: "border-salem-accent-black",
+  red: "border-l-salem-accent-red",
+  green: "border-l-salem-accent-green",
+  blue: "border-l-salem-accent-blue",
+  black: "border-l-salem-accent-black",
 };
 
-const COLOR_BGS: Record<CardColor, string> = {
-  red: "bg-salem-accent-red/10",
-  green: "bg-salem-accent-green/10",
-  blue: "bg-salem-accent-blue/10",
-  black: "bg-salem-accent-black/10",
+const COLOR_LABELS: Record<CardColor, string> = {
+  red: "text-salem-accent-red",
+  green: "text-salem-accent-green",
+  blue: "text-[#5a9a7a]",
+  black: "text-salem-text-secondary",
+};
+
+const COLOR_VALUE_BG: Record<CardColor, string> = {
+  red: "bg-salem-accent-red/20 text-salem-accent-red",
+  green: "bg-salem-accent-green/20 text-[#5a9a7a]",
+  blue: "bg-salem-accent-blue/20 text-[#5a8aaa]",
+  black: "bg-salem-accent-black/30 text-salem-text-secondary",
 };
 
 export default function GameCard({ cardType, selected, disabled, onSelect, testId }: GameCardProps) {
   const def = CARD_DEFINITIONS[cardType];
   if (!def) return null;
 
-  const borderColor = COLOR_BORDERS[def.color];
-  const bgColor = COLOR_BGS[def.color];
-  const imageSrc = CARD_IMAGE_SOURCES[cardType];
-
   return (
     <button
       data-testid={testId}
-      className={`group shrink-0 w-[92px] h-[132px] rounded-card border-2 transition-all duration-200 overflow-hidden relative
-        ${borderColor}
-        ${selected ? "translate-y-[-8px] shadow-glow" : ""}
+      className={`shrink-0 w-[88px] h-[128px] rounded-card border border-salem-accent-gold/15 border-l-[3px] ${COLOR_BORDERS[def.color]}
+        bg-gradient-to-b from-salem-bg-card-dark to-salem-bg-card-folded
+        flex flex-col items-center justify-between px-2 py-2 text-center overflow-hidden
+        transition-all duration-200 relative
+        ${selected ? "translate-y-[-8px] shadow-glow border-salem-accent-gold/40" : ""}
         ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer active:scale-95"}`}
       onClick={disabled ? undefined : onSelect}
       disabled={disabled}
       aria-label={def.nameCn}
     >
-      {imageSrc ? (
-        <>
-          <img
-            src={imageSrc}
-            alt={def.nameCn}
-            className="absolute inset-0 h-full w-full object-cover"
-            draggable={false}
-          />
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-1.5 pb-1.5 pt-6 opacity-0 transition-opacity group-focus-visible:opacity-100 group-hover:opacity-100">
-            <span className="block text-[10px] font-bold leading-tight text-salem-text-primary">
-              {def.nameCn}
-            </span>
-          </div>
-        </>
+      <span className={`text-[9px] uppercase tracking-wider ${COLOR_LABELS[def.color]} leading-tight`}>
+        {def.nameEn}
+      </span>
+
+      <span className="text-sm font-heading font-bold text-salem-text-bright leading-tight">
+        {def.nameCn}
+      </span>
+
+      <span className="text-[8px] text-salem-text-ink leading-tight line-clamp-2">
+        {def.description}
+      </span>
+
+      {def.accusationValue !== undefined && def.accusationValue > 0 ? (
+        <span className={`text-xs font-heading font-bold rounded-full px-1.5 py-0.5 ${COLOR_VALUE_BG[def.color]}`}>
+          +{def.accusationValue}
+        </span>
       ) : (
-        <div className={`h-full px-2 py-2 flex flex-col items-center justify-between ${bgColor}`}>
-          <span className="text-[10px] uppercase tracking-wide text-salem-text-secondary">
-            {def.nameEn}
-          </span>
-          <span className="text-sm font-bold text-salem-text-primary leading-tight">
-            {def.nameCn}
-          </span>
-          <span className="text-[9px] text-salem-text-secondary leading-tight text-center line-clamp-3">
-            {def.description}
-          </span>
-          {def.accusationValue !== undefined ? (
-            <span className="text-sm text-salem-accent-red font-bold">
-              +{def.accusationValue}
-            </span>
-          ) : (
-            <span className="h-4" />
-          )}
-        </div>
+        <span className="h-4" />
       )}
     </button>
   );

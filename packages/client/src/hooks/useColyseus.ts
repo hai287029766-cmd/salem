@@ -124,7 +124,7 @@ export function useColyseus(): UseColyseusReturn {
       setActiveRoom(createdRoom, roomCode);
       return { room: createdRoom, roomCode };
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to create room";
+      const message = err instanceof Error ? err.message : "创建房间失败";
       setError(message);
       throw err;
     } finally {
@@ -149,7 +149,7 @@ export function useColyseus(): UseColyseusReturn {
       setActiveRoom(joinedRoom, normalizedRoomCode);
       return joinedRoom;
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to join room";
+      const message = err instanceof Error ? err.message : "加入房间失败";
       setError(message);
       throw err;
     } finally {

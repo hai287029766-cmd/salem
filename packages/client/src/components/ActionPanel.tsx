@@ -24,7 +24,7 @@ export default function ActionPanel({
   const inPlayMode = actionMode === "play_card" || actionMode === "select_target";
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2 border-t border-salem-text-secondary/20 bg-salem-bg-secondary/80 safe-area-bottom">
+    <div className="fixed bottom-[52px] left-0 right-0 max-w-[430px] mx-auto flex items-center gap-3 px-4 py-2 border-t border-salem-accent-gold/10 bg-salem-bg-dark/95 backdrop-blur-sm z-20">
       {inPlayMode ? (
         <>
           <p className="flex-1 text-sm text-salem-accent-gold">

@@ -1,8 +1,12 @@
-import { useState, type ReactNode } from "react";
-import { Cat, Cross, Hand, Heart, Info, Shield, Skull, UserRound, Volume2 } from "lucide-react";
+import type { ReactNode } from "react";
+import {
+  Anchor, Cat, ChevronDown, Cross, Flame, Heart, Layers,
+  Scale, Scroll, Shield, Skull, UserRound,
+} from "lucide-react";
 import { CHARACTER_DEFINITIONS } from "@salem/shared";
 import type { CharacterName, TryalCardType } from "@salem/shared";
 import type { PlayerState } from "../hooks/useGameState";
+import { parseTryalCard, TRYAL_LABELS } from "../utils/tryalCardParser";
 
 interface PlayerSeatProps {
   player: PlayerState;
@@ -11,230 +15,263 @@ interface PlayerSeatProps {
   isSpeaking: boolean;
   selectable: boolean;
   onSelect: () => void;
+  expanded: boolean;
+  onToggle: () => void;
   testId?: string;
 }
 
 const ACCUSATION_MAX = 7;
 
-interface ParsedTryalCard {
-  type: TryalCardType;
-  faceUp: boolean;
-}
-
-const TRYAL_LABELS: Record<TryalCardType, string> = {
-  witch: "女巫",
-  not_witch: "镇民",
-  constable: "警长",
-};
-
-const TRYAL_SHORT_LABELS: Record<TryalCardType, string> = {
-  witch: "巫",
-  not_witch: "民",
-  constable: "警",
-};
-
-const TRYAL_CLASSES: Record<TryalCardType, string> = {
-  witch: "border-salem-witch bg-salem-witch/45 text-salem-text-primary",
-  not_witch: "border-salem-townfolk bg-salem-townfolk/45 text-salem-text-primary",
-  constable: "border-salem-constable bg-salem-constable/45 text-salem-text-primary",
-};
-
-function parseTryalCard(value: string | undefined): ParsedTryalCard | null {
-  if (!value) return null;
-  if (value === "witch" || value === "not_witch" || value === "constable") {
-    return { type: value, faceUp: true };
-  }
-
-  try {
-    const parsed = JSON.parse(value) as Partial<ParsedTryalCard>;
-    if (parsed.type === "witch" || parsed.type === "not_witch" || parsed.type === "constable") {
-      return {
-        type: parsed.type,
-        faceUp: parsed.faceUp ?? true,
-      };
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
-}
-
 export default function PlayerSeat({
   player,
   isCurrentTurn,
   isSelf,
-  isSpeaking,
+  isSpeaking: _isSpeaking,
   selectable,
   onSelect,
+  expanded,
+  onToggle,
   testId,
 }: PlayerSeatProps) {
-  const [showAbility, setShowAbility] = useState(false);
   const isDead = !player.isAlive;
-  const character = CHARACTER_DEFINITIONS.find((item) => item.name === (player.characterName as CharacterName));
+  const character = CHARACTER_DEFINITIONS.find(
+    (item) => item.name === (player.characterName as CharacterName),
+  );
   const characterLabel = character?.nameCn || player.characterName;
-  const characterAbility = player.characterAbility || character?.ability || "暂无角色能力说明";
-  const accusationRatio = Math.min(player.accusationPoints / ACCUSATION_MAX, 1);
+  const characterAbility =
+    player.characterAbility || character?.ability || "";
 
-  const cardFrame = [
-    "relative min-h-[172px] rounded-card border p-3 text-left shadow-card transition-all",
-    isDead ? "border-salem-text-secondary/25 bg-salem-bg-secondary/45 opacity-70 grayscale" : "bg-salem-bg-secondary/90",
-    isCurrentTurn ? "border-salem-accent-gold shadow-glow" : "border-salem-accent-gold/20",
-    isSelf ? "ring-1 ring-salem-accent-gold/60" : "",
-    selectable ? "cursor-pointer hover:border-salem-accent-gold hover:bg-salem-bg-secondary" : "",
+  const cardClasses = [
+    "relative rounded-card border overflow-hidden transition-all duration-300",
+    isDead
+      ? "border-salem-text-secondary/20 bg-salem-bg-card-dark/60 opacity-70 grayscale"
+      : "bg-gradient-to-b from-salem-bg-card-dark to-salem-bg-card-folded",
+    isCurrentTurn
+      ? "border-salem-accent-gold/30 shadow-glow"
+      : "border-salem-accent-gold/10",
+    isSelf ? "border-salem-accent-gold/25 from-[#1e1814]" : "",
   ].join(" ");
 
   return (
-    <section data-testid={testId} className={cardFrame}>
-      <button
-        data-testid={testId ? `${testId}-select` : undefined}
-        className="absolute inset-0 rounded-card"
-        onClick={selectable ? onSelect : undefined}
-        disabled={!selectable}
-        aria-label={`选择${player.name}`}
-      />
+    <section data-testid={testId} className={cardClasses}>
+      {/* Gold top line for active turn */}
+      {isCurrentTurn && (
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-salem-accent-gold/30 to-transparent" />
+      )}
 
-      <div className="relative z-10 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate font-heading text-lg leading-tight text-salem-text-primary">
+      {/* Turn pulse dot */}
+      {isCurrentTurn && (
+        <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-salem-accent-gold shadow-glow animate-turn-pulse z-10" />
+      )}
+
+      {/* Clickable overlay for target selection */}
+      {selectable && (
+        <button
+          data-testid={testId ? `${testId}-select` : undefined}
+          className="absolute inset-0 z-20 rounded-card cursor-pointer hover:bg-salem-accent-gold/5"
+          onClick={onSelect}
+          aria-label={`选择 ${player.name}`}
+        />
+      )}
+
+      {/* Header (always visible) */}
+      <div
+        className="flex items-center gap-3 px-3.5 py-3 cursor-pointer min-h-[56px]"
+        onClick={selectable ? undefined : onToggle}
+        role="button"
+        aria-expanded={expanded}
+      >
+        {/* Portrait */}
+        <Portrait isDead={isDead} isSelf={isSelf} isCurrentTurn={isCurrentTurn} />
+
+        {/* Name */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <h3 className="truncate font-heading text-[15px] text-salem-text-bright leading-tight">
               {player.name}
             </h3>
-            {isSelf && <StatusPill tone="gold">我</StatusPill>}
-            {isCurrentTurn && <StatusPill tone="gold">当前回合</StatusPill>}
-            {isDead && <StatusPill tone="muted">已死亡</StatusPill>}
-            {isSpeaking && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-salem-success/40 bg-salem-success/10 px-2 py-0.5 text-xs text-salem-success">
-                <Volume2 size={12} />
-                发言
+            {isSelf && (
+              <span className="text-salem-accent-gold text-xs font-heading">
+                {" "}我
               </span>
             )}
           </div>
-
-          <button
-            type="button"
-            data-testid={testId ? `${testId}-character` : undefined}
-            className="mt-2 inline-flex max-w-full items-center gap-1 rounded-button border border-salem-accent-gold/30 bg-salem-bg-primary/60 px-2 py-1 text-xs text-salem-accent-gold"
-            onClick={() => setShowAbility((prev) => !prev)}
-            onMouseEnter={() => setShowAbility(true)}
-            onMouseLeave={() => setShowAbility(false)}
-            aria-label={`查看${characterLabel}能力`}
-          >
-            <Info size={13} />
-            <span className="truncate">{characterLabel}</span>
-          </button>
-        </div>
-
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-salem-accent-gold/35 bg-salem-bg-primary/70">
-          {isDead ? (
-            <Skull size={24} className="text-salem-text-secondary" />
-          ) : (
-            <UserRound size={24} className={isSelf ? "text-salem-accent-gold" : "text-salem-text-primary"} />
+          {characterLabel && (
+            <p className="text-[11px] text-salem-text-ink italic truncate mt-0.5">
+              {characterLabel}
+            </p>
           )}
         </div>
+
+        {/* Identity strip (compact) */}
+        <IdentityStrip player={player} isSelf={isSelf} />
+
+        {/* Rope knots (compact) */}
+        <RopeKnotsCompact points={player.accusationPoints} />
+
+        {/* Expand arrow */}
+        <ChevronDown
+          size={14}
+          className={`text-salem-text-ink transition-transform duration-300 shrink-0 ${
+            expanded ? "rotate-180" : ""
+          }`}
+        />
       </div>
 
-      <div className="relative z-10 mt-3 grid grid-cols-3 gap-2">
-        <Metric label="手牌" value={`${player.handCardCount}`} icon={<Hand size={13} />} testId={testId ? `${testId}-hand-count` : undefined} />
-        <Metric label="身份" value={`${player.tryalCardFaceUp}/${player.tryalCardCount}`} />
-        <Metric label="指控" value={`${player.accusationPoints}/${ACCUSATION_MAX}`} />
+      {/* Expanded body */}
+      <div
+        className={`transition-all duration-400 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden ${
+          expanded ? "max-h-[400px] opacity-100" : "max-h-0 opacity-0"
+        }`}
+      >
+        <div className="px-3.5 pb-3.5 space-y-3">
+          {/* Character skill scroll */}
+          {characterLabel && characterAbility && (
+            <div className="flex items-start gap-2 rounded-card bg-salem-accent-rope/10 border border-salem-accent-gold/15 p-2.5">
+              <Scroll size={16} className="text-salem-accent-gold shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="font-heading text-xs text-salem-accent-gold">
+                  {characterLabel}
+                </p>
+                <p className="text-[11px] text-salem-text-ink leading-relaxed mt-0.5">
+                  {characterAbility}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Identity envelopes (detailed) */}
+          <EnvelopeRow player={player} isSelf={isSelf} testId={testId ? `${testId}-tryal` : undefined} />
+
+          {/* Rope accusation bar (detailed) */}
+          <RopeBarDetail points={player.accusationPoints} />
+
+          {/* Stats row */}
+          <div className="flex gap-2.5">
+            <StatPill
+              icon={<Layers size={14} />}
+              value={player.handCardCount}
+              label="手牌"
+              testId={testId ? `${testId}-hand-count` : undefined}
+            />
+            <StatPill
+              icon={<Scale size={14} />}
+              value={player.accusationPoints}
+              label="指控"
+            />
+          </div>
+
+          {/* Public status badges */}
+          <StatusBadges player={player} />
+        </div>
       </div>
-
-      <div className="relative z-10 mt-3">
-        <div className="mb-1 flex items-center justify-between text-[11px] text-salem-text-secondary">
-          <span>指控进度</span>
-          <span>{player.accusationPoints}/{ACCUSATION_MAX}</span>
-        </div>
-        <div className="h-2 rounded-full bg-salem-bg-primary">
-          <div
-            className="h-full rounded-full bg-salem-accent-red transition-all"
-            style={{ width: `${accusationRatio * 100}%` }}
-          />
-        </div>
-      </div>
-
-      <IdentityCardRow player={player} isSelf={isSelf} testId={testId ? `${testId}-tryal` : undefined} />
-      <StatusRow player={player} />
-
-      {showAbility && characterLabel && (
-        <div
-          data-testid={testId ? `${testId}-character-ability` : undefined}
-          className="absolute left-3 right-3 top-[4.4rem] z-30 rounded-card border border-salem-accent-gold/40 bg-salem-bg-primary p-3 text-left shadow-card"
-        >
-          <p className="font-heading text-sm text-salem-accent-gold">{characterLabel}</p>
-          <p className="mt-1 text-xs leading-relaxed text-salem-text-primary">{characterAbility}</p>
-        </div>
-      )}
     </section>
   );
 }
 
-function Metric({
-  label,
-  value,
-  icon,
-  testId,
+function Portrait({
+  isDead,
+  isSelf,
+  isCurrentTurn,
 }: {
-  label: string;
-  value: string;
-  icon?: ReactNode;
-  testId?: string;
+  isDead: boolean;
+  isSelf: boolean;
+  isCurrentTurn: boolean;
 }) {
+  const borderClass = isCurrentTurn
+    ? "border-salem-accent-gold shadow-glow"
+    : "border-salem-accent-gold/20";
+
   return (
-    <div className="rounded-card border border-salem-text-secondary/15 bg-salem-bg-primary/45 px-2 py-2">
-      <p className="flex items-center gap-1 text-[11px] text-salem-text-secondary">
-        {icon}
-        {label}
-      </p>
-      <p data-testid={testId} className="mt-1 font-heading text-base text-salem-text-primary">
-        {value}
-      </p>
+    <div
+      className={`portrait-noise relative w-11 h-11 rounded-full flex items-center justify-center shrink-0
+        bg-gradient-to-br from-[#2a2018] to-[#1a1410] border-2 overflow-hidden ${borderClass}`}
+    >
+      {isDead ? (
+        <Skull size={22} className="text-salem-text-secondary relative z-[1]" />
+      ) : (
+        <UserRound
+          size={22}
+          className={`relative z-[1] ${
+            isSelf ? "text-salem-accent-gold" : "text-salem-text-primary"
+          }`}
+          style={{ filter: "sepia(0.6) contrast(1.2) brightness(0.9)" }}
+        />
+      )}
     </div>
   );
 }
 
-function StatusPill({ tone, children }: { tone: "gold" | "muted"; children: ReactNode }) {
-  const className =
-    tone === "gold"
-      ? "border-salem-accent-gold/40 bg-salem-accent-gold/15 text-salem-accent-gold"
-      : "border-salem-text-secondary/30 bg-salem-bg-primary/60 text-salem-text-secondary";
+function IdentityStrip({ player, isSelf }: { player: PlayerState; isSelf: boolean }) {
+  const count = Math.max(
+    player.tryalCardCount,
+    player.tryalCards.length,
+    player.publicTryalCards.length,
+  );
+  if (count <= 0) return null;
 
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[11px] leading-none ${className}`}>
-      {children}
-    </span>
+    <div className="flex items-center gap-1">
+      {Array.from({ length: count }, (_, i) => {
+        const ownCard = parseTryalCard(player.tryalCards[i]);
+        const publicCard = parseTryalCard(player.publicTryalCards[i]);
+        const visibleCard = isSelf ? ownCard : publicCard;
+        const isFallbackRevealed = !visibleCard && !isSelf && i < player.tryalCardFaceUp;
+        const revealed = Boolean(visibleCard) || isFallbackRevealed;
+
+        let envClass = "wax-envelope-sealed";
+        if (visibleCard) {
+          envClass =
+            visibleCard.type === "witch"
+              ? "wax-envelope-witch"
+              : visibleCard.type === "constable"
+              ? "wax-envelope-constable"
+              : "wax-envelope-villager";
+        } else if (isFallbackRevealed) {
+          envClass = "wax-envelope-villager";
+        }
+
+        return (
+          <div
+            key={i}
+            className={`w-5 h-[26px] rounded-[3px] flex items-center justify-center shrink-0 ${envClass}`}
+          >
+            {!revealed && (
+              <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-salem-accent-wax-bright to-salem-accent-wax shadow-wax" />
+            )}
+            {visibleCard && (
+              <EnvelopeIcon type={visibleCard.type} size={12} />
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
-function StatusRow({ player }: { player: PlayerState }) {
-  type StatusItem = { label: string; icon: ReactNode };
-  const statuses: StatusItem[] = [];
-  if (player.hasBlackCat) statuses.push({ label: "黑猫", icon: <Cat size={13} /> });
-  if (player.hasAsylum) statuses.push({ label: "庇护", icon: <Shield size={13} /> });
-  if (player.hasPiety) statuses.push({ label: "虔诚", icon: <Cross size={13} /> });
-  if (player.hasMatchmaker) statuses.push({ label: "红线", icon: <Heart size={13} /> });
-  if (player.hasStocks) statuses.push({ label: "枷锁", icon: <Skull size={13} /> });
-
-  if (statuses.length === 0) {
-    return <p className="relative z-10 mt-3 text-xs text-salem-text-secondary">暂无公开状态</p>;
-  }
-
+function RopeKnotsCompact({ points }: { points: number }) {
+  const danger = points >= 5;
   return (
-    <div className="relative z-10 mt-3 flex flex-wrap gap-1.5">
-      {statuses.map((status) => (
-        <span
-          key={status.label}
-          className="inline-flex items-center gap-1 rounded-full border border-salem-accent-gold/25 bg-salem-bg-primary/55 px-2 py-1 text-xs text-salem-text-primary"
-        >
-          {status.icon}
-          {status.label}
-        </span>
+    <div className={`flex items-center gap-0.5 ${danger ? "danger" : ""}`}>
+      {Array.from({ length: ACCUSATION_MAX }, (_, i) => (
+        <div
+          key={i}
+          className={`rope-knot ${i < points ? "tied" : ""}`}
+        />
       ))}
+      <Anchor
+        size={14}
+        className={`ml-0.5 transition-all ${
+          danger
+            ? "text-salem-accent-rope-knot gallows-swing opacity-100"
+            : "text-salem-text-ink opacity-20"
+        }`}
+      />
     </div>
   );
 }
 
-function IdentityCardRow({
+function EnvelopeRow({
   player,
   isSelf,
   testId,
@@ -243,33 +280,148 @@ function IdentityCardRow({
   isSelf: boolean;
   testId?: string;
 }) {
-  const count = Math.max(player.tryalCardCount, player.tryalCards.length, player.publicTryalCards.length);
+  const count = Math.max(
+    player.tryalCardCount,
+    player.tryalCards.length,
+    player.publicTryalCards.length,
+  );
   if (count <= 0) return null;
 
   return (
-    <div data-testid={testId} className="relative z-10 mt-3 flex flex-wrap gap-1.5">
-      {Array.from({ length: count }, (_, index) => {
-        const ownCard = parseTryalCard(player.tryalCards[index]);
-        const publicCard = parseTryalCard(player.publicTryalCards[index]);
-        const visibleCard = isSelf ? ownCard : publicCard;
-        const isFallbackRevealed = !visibleCard && !isSelf && index < player.tryalCardFaceUp;
-        const faceUp = isSelf ? Boolean(ownCard) : Boolean(visibleCard) || isFallbackRevealed;
+    <div data-testid={testId}>
+      <p className="text-[10px] text-salem-text-ink uppercase tracking-widest mb-2 flex items-center gap-1.5">
+        <Flame size={10} />
+        身份封印
+      </p>
+      <div className="flex gap-2 justify-center">
+        {Array.from({ length: count }, (_, i) => {
+          const ownCard = parseTryalCard(player.tryalCards[i]);
+          const publicCard = parseTryalCard(player.publicTryalCards[i]);
+          const visibleCard = isSelf ? ownCard : publicCard;
+          const isFallbackRevealed = !visibleCard && !isSelf && i < player.tryalCardFaceUp;
+          const revealed = Boolean(visibleCard) || isFallbackRevealed;
 
-        return (
-          <span
-            key={index}
-            data-testid={testId ? `${testId}-card-${index}` : undefined}
-            className={`flex h-11 min-w-8 flex-col items-center justify-center rounded-[6px] border px-1 text-center text-[10px] font-bold leading-tight
-              ${visibleCard ? TRYAL_CLASSES[visibleCard.type] : faceUp ? "border-salem-accent-gold/50 bg-salem-bg-card/15 text-salem-accent-gold" : "border-salem-accent-gold/35 bg-salem-accent-black/80 text-salem-accent-gold"}`}
-            title={visibleCard ? TRYAL_LABELS[visibleCard.type] : faceUp ? "已公开身份" : "未公开身份"}
-          >
-            <span>{visibleCard ? TRYAL_SHORT_LABELS[visibleCard.type] : faceUp ? "开" : "?"}</span>
-            <span className="mt-0.5 text-[8px] font-normal text-salem-text-secondary">
-              {index + 1}
-            </span>
-          </span>
-        );
-      })}
+          let envClass = "wax-envelope-sealed";
+          if (visibleCard) {
+            envClass =
+              visibleCard.type === "witch"
+                ? "wax-envelope-witch"
+                : visibleCard.type === "constable"
+                ? "wax-envelope-constable"
+                : "wax-envelope-villager";
+          }
+
+          return (
+            <div
+              key={i}
+              data-testid={testId ? `${testId}-card-${i}` : undefined}
+              className={`w-12 h-16 rounded-md flex flex-col items-center justify-center transition-all ${envClass} ${
+                revealed ? "animate-reveal" : ""
+              }`}
+              title={visibleCard ? TRYAL_LABELS[visibleCard.type] : revealed ? "已公开" : "已密封"}
+            >
+              {!revealed ? (
+                <>
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-salem-accent-wax-bright to-salem-accent-wax shadow-wax" />
+                  <span className="text-[10px] text-salem-text-ink opacity-60 mt-1">
+                    {i + 1}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <EnvelopeIcon type={visibleCard?.type} size={20} />
+                  <span className="text-[10px] mt-0.5 tracking-wide">
+                    {visibleCard ? TRYAL_LABELS[visibleCard.type] : "?"}
+                  </span>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function EnvelopeIcon({ type, size = 14 }: { type?: TryalCardType; size?: number }) {
+  if (type === "witch") {
+    return <Flame size={size} className="text-[#c090e0]" />;
+  }
+  if (type === "constable") {
+    return <Shield size={size} className="text-[#80b8e0]" />;
+  }
+  return <UserRound size={size} className="text-[#90c0e0]" />;
+}
+
+function RopeBarDetail({ points }: { points: number }) {
+  const danger = points >= 5;
+  return (
+    <div>
+      <p className="text-[10px] text-salem-text-ink uppercase tracking-widest mb-2 flex items-center gap-1.5">
+        <Flame size={10} />
+        审判之火 {points}/{ACCUSATION_MAX}
+      </p>
+      <div className={`flex items-center gap-[3px] h-8 rounded-md bg-black/30 px-2 ${danger ? "danger" : ""}`}>
+        {Array.from({ length: ACCUSATION_MAX }, (_, i) => (
+          <div key={i} className={`rope-segment ${i < points ? "tied" : ""}`} />
+        ))}
+        <Anchor
+          size={18}
+          className={`ml-1 transition-all ${
+            danger
+              ? "text-salem-accent-rope-knot gallows-swing-large opacity-100"
+              : "text-salem-text-ink opacity-15"
+          }`}
+        />
+      </div>
+    </div>
+  );
+}
+
+function StatPill({
+  icon,
+  value,
+  label,
+  testId,
+}: {
+  icon: ReactNode;
+  value: number;
+  label: string;
+  testId?: string;
+}) {
+  return (
+    <div className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-black/25 rounded-card border border-salem-accent-gold/10">
+      <span className="opacity-70">{icon}</span>
+      <span data-testid={testId} className="font-heading text-lg text-salem-accent-gold">
+        {value}
+      </span>
+      <span className="text-[10px] text-salem-text-ink">{label}</span>
+    </div>
+  );
+}
+
+function StatusBadges({ player }: { player: PlayerState }) {
+  type Badge = { label: string; icon: ReactNode };
+  const badges: Badge[] = [];
+  if (player.hasBlackCat) badges.push({ label: "黑猫", icon: <Cat size={12} /> });
+  if (player.hasAsylum) badges.push({ label: "庇护", icon: <Shield size={12} /> });
+  if (player.hasPiety) badges.push({ label: "虔诚", icon: <Cross size={12} /> });
+  if (player.hasMatchmaker) badges.push({ label: "红线", icon: <Heart size={12} /> });
+  if (player.hasStocks) badges.push({ label: "枷锁", icon: <Skull size={12} /> });
+
+  if (badges.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {badges.map((b) => (
+        <span
+          key={b.label}
+          className="inline-flex items-center gap-1 rounded-full border border-salem-accent-gold/20 bg-black/20 px-2 py-1 text-[10px] text-salem-text-primary"
+        >
+          {b.icon}
+          {b.label}
+        </span>
+      ))}
     </div>
   );
 }

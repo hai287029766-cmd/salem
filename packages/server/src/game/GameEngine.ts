@@ -81,7 +81,7 @@ export class GameEngine {
     if (players.length < 4) return;
 
     this.state.round = 1;
-    this.addLog("Game started");
+    this.addLog("游戏已开始");
 
     // Assign characters
     const characters = assignCharacters(players.length);
@@ -199,7 +199,7 @@ export class GameEngine {
 
   private handleDealingPhase(): void {
     this.broadcast("sound_effect", { sound: "card_deal" });
-    this.addLog("Cards dealt to all players");
+    this.addLog("所有玩家已发牌");
 
     // Auto-advance to dawn after 2 seconds
     setTimeout(() => {
@@ -212,7 +212,7 @@ export class GameEngine {
   private handleDawnPhase(): void {
     this.dawnBlackCatPlacedBy.clear();
     this.broadcast("sound_effect", { sound: "dawn" });
-    this.addLog("Dawn -- witches place the Black Cat");
+    this.addLog("黎明 -- 女巫放置黑猫");
 
     this.startTimer(TIMER_DEFAULTS.dawn, () => {
       // If witches did not place black cat, assign randomly
@@ -252,7 +252,7 @@ export class GameEngine {
         if (player.stocksCount <= 0) {
           player.hasStocks = false;
         }
-        this.addLog(`${player.name} is in the stocks and skips their turn`);
+        this.addLog(`${player.name} 被关入枷锁，跳过此回合`);
         this.advancePlayerIndex();
         attempts++;
         continue;
@@ -271,7 +271,7 @@ export class GameEngine {
     this.state.currentPlayerId = currentId;
     const currentPlayer = this.state.players.get(currentId);
     if (currentPlayer) {
-      this.addLog(`${currentPlayer.name}'s turn`);
+      this.addLog(`${currentPlayer.name}的回合`);
     }
 
     this.startTimer(TIMER_DEFAULTS.dayTurn, () => {
@@ -297,7 +297,7 @@ export class GameEngine {
   private handleConspiracyPhase(): void {
     this.conspiracyChoices.clear();
     this.broadcast("sound_effect", { sound: "card_flip" });
-    this.addLog("Conspiracy! Each living player takes one face-down tryal card from the living player on their left");
+    this.addLog("阴谋！每名存活玩家从左边的玩家处拿取一张未公开的审判卡");
 
     this.startTimer(TIMER_DEFAULTS.conspiracy, () => {
       // Auto-assign for players who did not choose
@@ -312,13 +312,13 @@ export class GameEngine {
     this.constableProtectTargetId = "";
 
     this.broadcast("sound_effect", { sound: "night_begin" });
-    this.addLog("Night falls -- witches choose their target");
+    this.addLog("夜幕降临 -- 女巫选择击杀目标");
 
     // Check if any living witch exists
     const aliveWitches = this.getAlivePlayers().filter((p) => p.hasBeenWitch);
     if (aliveWitches.length === 0) {
       // No witches alive, skip to constable
-      this.addLog("No witches remain -- skipping to constable");
+      this.addLog("没有女巫存活 -- 跳过至警长阶段");
       this.transitionTo("night_constable");
       return;
     }
@@ -342,12 +342,12 @@ export class GameEngine {
     const constable = this.getAlivePlayers().find((p) => p.isConstable);
 
     if (!constable) {
-      this.addLog("No constable to protect anyone");
+      this.addLog("没有警长可以保护任何人");
       this.transitionTo("night_confess");
       return;
     }
 
-    this.addLog("Constable chooses who to protect");
+    this.addLog("警长选择保护对象");
 
     this.startTimer(TIMER_DEFAULTS.nightConstable, () => {
       // If constable did not choose, pick random (not self)
@@ -364,7 +364,7 @@ export class GameEngine {
   }
 
   private handleNightConfessPhase(): void {
-    this.addLog("Confess window -- flip a tryal card to survive the night");
+    this.addLog("认罪窗口 -- 翻开一张审判卡来渡过夜晚");
 
     this.startTimer(TIMER_DEFAULTS.nightConfess, () => {
       this.transitionTo("night_resolve");
@@ -372,14 +372,14 @@ export class GameEngine {
   }
 
   private handleNightResolvePhase(): void {
-    this.addLog("Resolving night actions...");
+    this.addLog("结算夜间行动...");
     this.state.isNightKillResolved = false;
 
     const targetId = this.witchKillTargetId;
     const target = targetId ? this.state.players.get(targetId) : undefined;
 
     if (!target || !target.isAlive) {
-      this.addLog("Night target is already dead or invalid");
+      this.addLog("夜间目标已死亡或无效");
       this.finishNightResolve();
       return;
     }
@@ -390,15 +390,15 @@ export class GameEngine {
     const hasAsylum = target.hasAsylum;
 
     if (isProtected) {
-      this.addLog(`${target.name} was protected by the Constable`);
+      this.addLog(`${target.name} 受到警长的保护`);
       this.broadcast("sound_effect", { sound: "card_flip" });
     } else if (hasConfessed) {
-      this.addLog(`${target.name} confessed and survives the night`);
+      this.addLog(`${target.name} 认罪并渡过夜晚`);
     } else if (hasAsylum) {
-      this.addLog(`${target.name} is protected by Asylum`);
+      this.addLog(`${target.name} 受到庇护的保护`);
     } else {
       // Player dies
-      this.killPlayer(targetId, "killed by witches at night");
+      this.killPlayer(targetId, "夜间被女巫杀害");
 
       // Check Matchmaker chain
       if (target.hasMatchmaker) {
@@ -407,9 +407,9 @@ export class GameEngine {
         if (partner && partner.isAlive && partner.hasMatchmaker) {
           const partnerCharName = partner.characterName as CharacterName;
           if (!isImmuneToMatchmaker(partnerCharName)) {
-            this.killPlayer(partnerId, "killed by Matchmaker link");
+            this.killPlayer(partnerId, "红线效果");
           } else {
-            this.addLog(`${partner.name} is immune to Matchmaker (Mary Warren)`);
+            this.addLog(`${partner.name} 免疫红线效果（玛丽-沃伦）`);
           }
         }
       }
@@ -474,7 +474,7 @@ export class GameEngine {
   private handleGameOver(result: WinCheckResult): void {
     if (!result.winner) return;
 
-    this.addLog(`Game Over -- ${result.winner} win!`);
+    this.addLog(`游戏结束 -- ${result.winner}获胜！`);
     this.broadcast("game_over", {
       winner: result.winner,
       reveals: this.buildPlayerReveals(),
@@ -534,10 +534,10 @@ export class GameEngine {
     }
 
     if (player.handCards.length === 0) {
-      this.addLog(`${player.name} has no cards left and ends their turn`);
+      this.addLog(`${player.name} 没有卡牌了，结束回合`);
       this.endCurrentDayTurn();
     } else {
-      this.addLog(`${player.name} may continue playing cards or end their turn`);
+      this.addLog(`${player.name} 可以继续出牌或结束回合`);
     }
 
     return true;
@@ -551,7 +551,7 @@ export class GameEngine {
 
     const player = this.state.players.get(playerId);
     if (player) {
-      this.addLog(`${player.name} ends their turn`);
+      this.addLog(`${player.name} 结束了回合`);
     }
     this.endCurrentDayTurn();
     return true;
@@ -579,7 +579,7 @@ export class GameEngine {
       if (card === "conspiracy") {
         this.state.deckRemaining = this.deck.getDeckSize();
         this.broadcast("sound_effect", { sound: "card_draw" });
-        this.addLog(`${player.name} drew Conspiracy!`);
+        this.addLog(`${player.name} 抽到了阴谋卡！`);
         this.deck.discard(["conspiracy"]);
         this.state.currentTurnCanEnd = false;
         this.transitionTo("conspiracy");
@@ -589,7 +589,7 @@ export class GameEngine {
       if (card === "night") {
         this.state.deckRemaining = this.deck.getDeckSize();
         this.broadcast("sound_effect", { sound: "card_draw" });
-        this.addLog(`${player.name} drew Night!`);
+        this.addLog(`${player.name} 抽到了黑夜卡！`);
         this.deck.discard(["night"]);
         this.state.currentTurnCanEnd = false;
         this.transitionTo("night_witch");
@@ -602,7 +602,7 @@ export class GameEngine {
 
     this.state.deckRemaining = this.deck.getDeckSize();
     this.broadcast("sound_effect", { sound: "card_draw" });
-    this.addLog(`${player.name} drew ${drawnCount} card(s)`);
+    this.addLog(`${player.name} 抽了${drawnCount}张卡牌`);
 
     // Normal draw: advance turn
     this.endCurrentDayTurn();
@@ -668,7 +668,7 @@ export class GameEngine {
       }
 
       this.witchKillTargetId = chosenTarget;
-      this.addLog("Witches have chosen their target");
+      this.addLog("女巫已选择击杀目标");
 
       // Advance immediately
       this.clearTimer();
@@ -692,7 +692,7 @@ export class GameEngine {
     if (!target || !target.isAlive) return false;
 
     this.constableProtectTargetId = targetId;
-    this.addLog("Constable has placed protection");
+    this.addLog("警长已放置保护");
 
     // Advance immediately
     this.clearTimer();
@@ -723,7 +723,7 @@ export class GameEngine {
     player.tryalCardFaceUp++;
     this.syncTryalCards(playerId);
 
-    this.addLog(`${player.name} confesses and flips a tryal card`);
+    this.addLog(`${player.name} 认罪并翻开一张审判卡`);
 
     this.broadcast("card_revealed", {
       playerId,
@@ -733,7 +733,7 @@ export class GameEngine {
 
     // Check if all cards face up => death
     if (shouldPlayerDie(tryalCards)) {
-      this.killPlayer(playerId, "all tryal cards revealed through confession");
+      this.killPlayer(playerId, "认罪导致所有审判卡被翻开");
     }
 
     // Check win conditions
@@ -796,7 +796,8 @@ export class GameEngine {
     target.tryalCardFaceUp++;
     this.syncTryalCards(targetId);
 
-    this.addLog(`A tryal card of ${target.name} is revealed: ${card.type}`);
+    const tryalTypeCn = card.type === "witch" ? "女巫" : card.type === "constable" ? "警长" : "村民";
+    this.addLog(`${target.name}的一张审判卡被翻开：${tryalTypeCn}`);
 
     this.broadcast("card_revealed", {
       playerId: targetId,
@@ -825,14 +826,14 @@ export class GameEngine {
       );
       if (constableOwner) {
         constableOwner.isConstable = false;
-        this.addLog(`${target.name} was the Constable -- the role is now vacant`);
+        this.addLog(`${target.name} 是警长 -- 该角色现已空缺`);
         this.sendRoleInfo(targetId);
       }
     }
 
     // Check if player dies (all tryal cards face up)
     if (shouldPlayerDie(tryalCards)) {
-      this.killPlayer(targetId, "all tryal cards revealed");
+      this.killPlayer(targetId, "所有审判卡被翻开");
     }
 
     // Check win conditions
@@ -876,7 +877,7 @@ export class GameEngine {
       if (drawn.length === 0) {
         this.sendToPlayer(playerId, "character_skill_result", {
           skill: "samuel_parris",
-          message: "Discard pile is empty",
+          message: "弃牌堆为空",
         });
         return false;
       }
@@ -889,11 +890,11 @@ export class GameEngine {
       player.samuelParrisUsesRemainingPublic = player.samuelParrisUsesRemaining;
       this.state.deckRemaining = this.deck.getDeckSize();
       this.hasPlayedCard = true;
-      this.addLog(`${player.name} uses Samuel Parris to draw ${drawn.length} card(s) from the discard pile`);
+      this.addLog(`${player.name} 使用塞缪尔-帕里斯从弃牌堆抽取${drawn.length}张卡牌`);
       this.sendToPlayer(playerId, "character_skill_result", {
         skill: "samuel_parris",
         availableCards: drawn,
-        message: "Drew from discard pile",
+        message: "已从弃牌堆抽取",
       });
       this.endCurrentDayTurn();
       return true;
@@ -908,7 +909,7 @@ export class GameEngine {
         this.sendToPlayer(playerId, "character_skill_result", {
           skill: "tituba",
           deck: currentDeck,
-          message: "Choose a new deck order",
+          message: "请选择新的牌堆顺序",
         });
         return true;
       }
@@ -919,10 +920,10 @@ export class GameEngine {
       player.titubaUsed = true;
       player.titubaUsedPublic = true;
       this.state.deckRemaining = this.deck.getDeckSize();
-      this.addLog(`${player.name} uses Tituba to inspect and reorder the deck`);
+      this.addLog(`${player.name} 使用提图芭查看并重新排列牌堆`);
       this.sendToPlayer(playerId, "character_skill_result", {
         skill: "tituba",
-        message: "Deck order updated",
+        message: "牌堆顺序已更新",
       });
       return true;
     }
@@ -932,7 +933,7 @@ export class GameEngine {
       if (!targetId) {
         this.sendToPlayer(playerId, "character_skill_result", {
           skill: "john_proctor",
-          message: "Choose a dead player to inspect",
+          message: "请选择一名已死亡玩家查看",
         });
         return true;
       }
@@ -962,19 +963,20 @@ export class GameEngine {
         this.deadPlayerHand.delete(targetId);
       }
 
-      this.addLog(`${player.name} uses John Proctor to take ${looted.length} card(s) from ${target.name}`);
+      this.addLog(`${player.name} 使用约翰-普罗克特从${target.name}处取得${looted.length}张卡牌`);
       this.sendToPlayer(playerId, "character_skill_result", {
         skill: "john_proctor",
         availableCards: looted,
         targetId,
-        message: "Looted dead player's hand",
+        message: "搜刮了死者的手牌",
       });
       return true;
     }
 
+    this.addLog(`${player.name} 的角色技能为被动效果`);
     this.sendToPlayer(playerId, "character_skill_result", {
       skill: characterName,
-      message: "This character ability is passive or already resolved by the rules engine",
+      message: "该角色能力为被动技能或已由规则引擎自动结算",
     });
     return true;
   }
@@ -982,7 +984,7 @@ export class GameEngine {
   setTopDeckCardForTest(card: CardType): boolean {
     this.deck.putOnTop(card);
     this.state.deckRemaining = this.deck.getDeckSize();
-    this.addLog(`Test setup: ${card} moved to the top of the deck`);
+    this.addLog(`测试设置：${card}移到牌堆顶部`);
     return true;
   }
 
@@ -995,7 +997,7 @@ export class GameEngine {
       player.handCards.push(card);
     }
     this.syncHandCount(player);
-    this.addLog(`Test setup: ${player.name}'s hand was set`);
+    this.addLog(`测试设置：${player.name}的手牌已设置`);
     return true;
   }
 
@@ -1035,7 +1037,7 @@ export class GameEngine {
         target.accusationPoints += value;
 
         this.addLog(
-          `${player.name} plays ${def.nameEn} (${value} pts) on ${target.name} [Total: ${target.accusationPoints}]`
+          `${player.name} 对${target.name}打出${def.nameCn}（${value}点）[累计：${target.accusationPoints}]`
         );
 
         // Check accusation threshold
@@ -1046,14 +1048,14 @@ export class GameEngine {
         if (player.characterName === "thomas_danforth") {
           const earlyThreshold = getDanforthEarlyThreshold(target.hasPiety);
           if (target.accusationPoints >= earlyThreshold && target.accusationPoints < threshold) {
-            this.addLog(`Thomas Danforth triggers early tryal at ${earlyThreshold} points!`);
+            this.addLog(`托马斯-丹福斯在${earlyThreshold}点时触发提前审判！`);
             this.triggerTryal(targetId);
             return;
           }
         }
 
         if (target.accusationPoints >= threshold) {
-          this.addLog(`${target.name} has reached ${threshold} accusation points -- TRYAL!`);
+          this.addLog(`${target.name}已达到${threshold}点指控 -- 审判！`);
           this.triggerTryal(targetId);
         }
         break;
@@ -1068,7 +1070,7 @@ export class GameEngine {
           target.accusationPoints += 7;
 
           this.addLog(
-            `${player.name} (Will Griggs) uses Alibi as Witness (7 pts) against ${target.name}!`
+            `${player.name}（威尔-格里格斯）将不在场证明作为7点证人卡对${target.name}使用！`
           );
 
           const charName = target.characterName as CharacterName;
@@ -1089,7 +1091,7 @@ export class GameEngine {
           );
           target.accusationPoints = 0;
 
-          this.addLog(`${player.name} plays Alibi on ${target.name} -- all accusations removed`);
+          this.addLog(`${player.name} 对${target.name}打出不在场证明 -- 所有指控已移除`);
         }
 
         this.deck.discard([card]);
@@ -1103,7 +1105,7 @@ export class GameEngine {
         front.push(card);
         this.frontCards.set(targetId, front);
 
-        this.addLog(`${player.name} puts ${target.name} in the Stocks`);
+        this.addLog(`${player.name} 将${target.name}关入枷锁`);
         break;
       }
 
@@ -1125,7 +1127,7 @@ export class GameEngine {
           this.syncHandCount(secondaryTarget);
 
           this.addLog(
-            `${player.name} uses Robbery: takes a card from ${target.name} and gives to ${secondaryTarget.name}`
+            `${player.name} 使用抢劫：从${target.name}处拿取一张卡牌并交给${secondaryTarget.name}`
           );
         }
 
@@ -1153,7 +1155,7 @@ export class GameEngine {
         this.transferFrontCardStatuses(targetId, secondaryTargetId, sourceFront);
 
         this.addLog(
-          `${player.name} uses Scapegoat: moves all front cards from ${target.name} to ${secondaryTarget.name}`
+          `${player.name} 使用替罪羊：将${target.name}面前的所有卡牌转移给${secondaryTarget.name}`
         );
 
         this.deck.discard([card]);
@@ -1193,7 +1195,7 @@ export class GameEngine {
           target.matchmakerPartnerId = "";
         }
 
-        this.addLog(`${player.name} uses Curse on ${target.name} -- blue cards removed`);
+        this.addLog(`${player.name} 对${target.name}使用诅咒 -- 蓝色卡牌已移除`);
         this.deck.discard([card]);
         break;
       }
@@ -1204,7 +1206,7 @@ export class GameEngine {
         front.push(card);
         this.frontCards.set(targetId, front);
 
-        this.addLog(`${player.name} gives Piety to ${target.name}`);
+        this.addLog(`${player.name} 给予${target.name}虔诚`);
         break;
       }
 
@@ -1214,7 +1216,7 @@ export class GameEngine {
         front.push(card);
         this.frontCards.set(targetId, front);
 
-        this.addLog(`${player.name} gives Asylum to ${target.name}`);
+        this.addLog(`${player.name} 给予${target.name}庇护`);
         break;
       }
 
@@ -1240,13 +1242,13 @@ export class GameEngine {
               firstPlayer.hasMatchmaker = false;
             }
             this.matchmakerHolders = [];
-            this.addLog("Both Matchmaker cards on the same player -- discarded");
+            this.addLog("两张红线卡都在同一玩家身上 -- 已弃掉");
           } else {
             const firstPlayer = this.state.players.get(first);
             const secondPlayer = this.state.players.get(second);
             if (firstPlayer) firstPlayer.matchmakerPartnerId = second;
             if (secondPlayer) secondPlayer.matchmakerPartnerId = first;
-            this.addLog(`${firstPlayer?.name} and ${secondPlayer?.name} are now linked by Matchmaker`);
+            this.addLog(`${firstPlayer?.name}和${secondPlayer?.name}现已通过红线卡绑定`);
           }
         }
         break;
@@ -1380,7 +1382,7 @@ export class GameEngine {
       this.refreshPlayerRoles(playerId);
     }
 
-    this.addLog("Conspiracy resolved -- tryal cards have changed hands");
+    this.addLog("阴谋已结算 -- 审判卡已交换");
 
     // Check win conditions
     const winResult = this.checkWin();
@@ -1422,7 +1424,7 @@ export class GameEngine {
       this.currentPlayerIndex = ownerIndex;
     }
 
-    this.addLog(`Black Cat placed on ${target.name}`);
+    this.addLog(`黑猫已放置在${target.name}身上`);
   }
 
   private killPlayer(playerId: string, reason: string): void {
@@ -1430,7 +1432,7 @@ export class GameEngine {
     if (!player || !player.isAlive) return;
 
     player.isAlive = false;
-    this.addLog(`${player.name} dies -- ${reason}`);
+    this.addLog(`${player.name} 死亡 -- ${reason}`);
 
     this.broadcast("player_killed", {
       playerId,
@@ -1594,7 +1596,7 @@ export class GameEngine {
 
     this.state.blackCatOwnerId = "";
     this.matchmakerHolders = [];
-    this.addLog("Two players remain -- all blue cards removed");
+    this.addLog("仅剩两名玩家 -- 所有蓝色卡牌已移除");
   }
 
   private syncTryalCards(playerId: string): void {
@@ -1762,7 +1764,7 @@ export class GameEngine {
     this.state.isPaused = true;
     this.timerPausedRemaining = this.state.timer;
     this.broadcast("paused", { by: coordinatorId });
-    this.addLog("Game paused by coordinator");
+    this.addLog("协调员已暂停游戏");
     return true;
   }
 
@@ -1772,7 +1774,7 @@ export class GameEngine {
 
     this.state.isPaused = false;
     this.broadcast("resumed", { by: coordinatorId });
-    this.addLog("Game resumed by coordinator");
+    this.addLog("协调员已恢复游戏");
     return true;
   }
 
@@ -1782,7 +1784,7 @@ export class GameEngine {
 
     this.state.timer += seconds;
     this.broadcast("timer_extended", { seconds });
-    this.addLog(`Timer extended by ${seconds} seconds`);
+    this.addLog(`计时器延长${seconds}秒`);
     return true;
   }
 
