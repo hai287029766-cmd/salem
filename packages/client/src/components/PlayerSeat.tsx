@@ -4,7 +4,7 @@ import {
   Anchor, Cat, ChevronDown, Cross, Flame, Heart, Layers,
   Lock, Scale, Scroll, Shield, Skull, UserRound,
 } from "lucide-react";
-import { CHARACTER_DEFINITIONS } from "@salem/shared";
+import { CHARACTER_DEFINITIONS, ACCUSATION_THRESHOLD, GEORGE_BURROUGHS_THRESHOLD } from "@salem/shared";
 import type { CharacterName, TryalCardType } from "@salem/shared";
 import type { PlayerState } from "../hooks/useGameState";
 import { parseTryalCard, TRYAL_LABELS } from "../utils/tryalCardParser";
@@ -21,7 +21,12 @@ interface PlayerSeatProps {
   testId?: string;
 }
 
-const ACCUSATION_MAX = 7;
+function getEffectiveThreshold(player: PlayerState): number {
+  const base = player.characterName === "george_burroughs"
+    ? GEORGE_BURROUGHS_THRESHOLD
+    : ACCUSATION_THRESHOLD;
+  return player.hasPiety ? base * 2 : base;
+}
 
 export default function PlayerSeat({
   player,
@@ -111,7 +116,7 @@ export default function PlayerSeat({
         <IdentityStrip player={player} isSelf={isSelf} />
 
         {/* Rope knots (compact) */}
-        <RopeKnotsCompact points={player.accusationPoints} />
+        <RopeKnotsCompact points={player.accusationPoints} max={getEffectiveThreshold(player)} />
 
         {/* Expand arrow */}
         <ChevronDown
@@ -148,7 +153,7 @@ export default function PlayerSeat({
           <EnvelopeRow player={player} isSelf={isSelf} testId={testId ? `${testId}-tryal` : undefined} />
 
           {/* Rope accusation bar (detailed) */}
-          <RopeBarDetail points={player.accusationPoints} />
+          <RopeBarDetail points={player.accusationPoints} max={getEffectiveThreshold(player)} />
 
           {/* Stats row */}
           <div className="flex gap-2.5">
@@ -220,19 +225,16 @@ function IdentityStrip({ player, isSelf }: { player: PlayerState; isSelf: boolea
         const ownCard = parseTryalCard(player.tryalCards[i]);
         const publicCard = parseTryalCard(player.publicTryalCards[i]);
         const visibleCard = isSelf ? ownCard : publicCard;
-        const isFallbackRevealed = !visibleCard && !isSelf && i < player.tryalCardFaceUp;
-        const revealed = Boolean(visibleCard) || isFallbackRevealed;
+        const cardType = visibleCard?.type ?? null;
 
         let envClass = "wax-envelope-sealed";
-        if (visibleCard) {
+        if (cardType) {
           envClass =
-            visibleCard.type === "witch"
+            cardType === "witch"
               ? "wax-envelope-witch"
-              : visibleCard.type === "constable"
+              : cardType === "constable"
               ? "wax-envelope-constable"
               : "wax-envelope-villager";
-        } else if (isFallbackRevealed) {
-          envClass = "wax-envelope-villager";
         }
 
         return (
@@ -240,11 +242,10 @@ function IdentityStrip({ player, isSelf }: { player: PlayerState; isSelf: boolea
             key={i}
             className={`w-5 h-[26px] rounded-[3px] flex items-center justify-center shrink-0 ${envClass}`}
           >
-            {!revealed && (
+            {cardType ? (
+              <EnvelopeIcon type={cardType} size={12} />
+            ) : (
               <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-salem-accent-wax-bright to-salem-accent-wax shadow-wax" />
-            )}
-            {visibleCard && (
-              <EnvelopeIcon type={visibleCard.type} size={12} />
             )}
           </div>
         );
@@ -253,11 +254,11 @@ function IdentityStrip({ player, isSelf }: { player: PlayerState; isSelf: boolea
   );
 }
 
-function RopeKnotsCompact({ points }: { points: number }) {
-  const danger = points >= 5;
+function RopeKnotsCompact({ points, max }: { points: number; max: number }) {
+  const danger = points >= max - 2;
   return (
     <div className={`flex items-center gap-0.5 ${danger ? "danger" : ""}`}>
-      {Array.from({ length: ACCUSATION_MAX }, (_, i) => (
+      {Array.from({ length: max }, (_, i) => (
         <div
           key={i}
           className={`rope-knot ${i < points ? "tied" : ""}`}
@@ -302,15 +303,15 @@ function EnvelopeRow({
           const ownCard = parseTryalCard(player.tryalCards[i]);
           const publicCard = parseTryalCard(player.publicTryalCards[i]);
           const visibleCard = isSelf ? ownCard : publicCard;
-          const isFallbackRevealed = !visibleCard && !isSelf && i < player.tryalCardFaceUp;
-          const revealed = Boolean(visibleCard) || isFallbackRevealed;
+          const revealed = visibleCard?.faceUp ?? false;
+          const cardType = visibleCard?.type ?? null;
 
           let envClass = "wax-envelope-sealed";
-          if (visibleCard) {
+          if (cardType) {
             envClass =
-              visibleCard.type === "witch"
+              cardType === "witch"
                 ? "wax-envelope-witch"
-                : visibleCard.type === "constable"
+                : cardType === "constable"
                 ? "wax-envelope-constable"
                 : "wax-envelope-villager";
           }
@@ -322,20 +323,20 @@ function EnvelopeRow({
               className={`w-12 h-16 rounded-md flex flex-col items-center justify-center transition-all ${envClass} ${
                 revealed ? "animate-reveal" : ""
               }`}
-              title={visibleCard ? TRYAL_LABELS[visibleCard.type] : revealed ? "已公开" : "已密封"}
+              title={cardType ? TRYAL_LABELS[cardType] : revealed ? "已公开" : "已密封"}
             >
-              {!revealed ? (
+              {cardType ? (
                 <>
-                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-salem-accent-wax-bright to-salem-accent-wax shadow-wax" />
-                  <span className="text-[10px] text-salem-text-ink opacity-60 mt-1">
-                    {i + 1}
+                  <EnvelopeIcon type={cardType} size={20} />
+                  <span className="text-[10px] mt-0.5 tracking-wide">
+                    {TRYAL_LABELS[cardType]}
                   </span>
                 </>
               ) : (
                 <>
-                  <EnvelopeIcon type={visibleCard?.type} size={20} />
-                  <span className="text-[10px] mt-0.5 tracking-wide">
-                    {visibleCard ? TRYAL_LABELS[visibleCard.type] : "?"}
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-salem-accent-wax-bright to-salem-accent-wax shadow-wax" />
+                  <span className="text-[10px] text-salem-text-ink opacity-60 mt-1">
+                    {i + 1}
                   </span>
                 </>
               )}
@@ -357,16 +358,16 @@ function EnvelopeIcon({ type, size = 14 }: { type?: TryalCardType; size?: number
   return <UserRound size={size} className="text-[#90c0e0]" />;
 }
 
-function RopeBarDetail({ points }: { points: number }) {
-  const danger = points >= 5;
+function RopeBarDetail({ points, max }: { points: number; max: number }) {
+  const danger = points >= max - 2;
   return (
     <div>
       <p className="text-[10px] text-salem-text-ink uppercase tracking-widest mb-2 flex items-center gap-1.5">
         <Flame size={10} />
-        审判之火 {points}/{ACCUSATION_MAX}
+        审判之火 {points}/{max}
       </p>
       <div className={`flex items-center gap-[3px] h-8 rounded-md bg-black/30 px-2 ${danger ? "danger" : ""}`}>
-        {Array.from({ length: ACCUSATION_MAX }, (_, i) => (
+        {Array.from({ length: max }, (_, i) => (
           <div key={i} className={`rope-segment ${i < points ? "tied" : ""}`} />
         ))}
         <Anchor

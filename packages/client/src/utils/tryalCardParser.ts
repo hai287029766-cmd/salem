@@ -1,7 +1,7 @@
 import type { TryalCardType } from "@salem/shared";
 
 export interface ParsedTryalCard {
-  type: TryalCardType;
+  type: TryalCardType | null;
   faceUp: boolean;
 }
 
@@ -24,9 +24,12 @@ export function parseTryalCard(value: string | undefined): ParsedTryalCard | nul
   }
 
   try {
-    const parsed = JSON.parse(value) as Partial<ParsedTryalCard>;
+    const parsed = JSON.parse(value) as { type?: string; faceUp?: boolean };
     if (parsed.type === "witch" || parsed.type === "not_witch" || parsed.type === "constable") {
       return { type: parsed.type, faceUp: parsed.faceUp ?? true };
+    }
+    if (parsed.faceUp === false) {
+      return { type: null, faceUp: false };
     }
   } catch {
     return null;

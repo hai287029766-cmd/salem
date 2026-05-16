@@ -13,6 +13,7 @@ export type ClientMessage =
   | { type: "witch_confirm" }
   | { type: "constable_protect"; targetId: string }
   | { type: "confess"; cardIndex: number }
+  | { type: "decline_confess" }
   | { type: "conspiracy_pass"; cardIndex: number }
   | {
       type: "use_character_skill";

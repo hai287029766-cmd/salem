@@ -3,15 +3,15 @@ import { Howl } from "howler";
 import type { SoundType } from "@salem/shared";
 
 const SOUND_FILES: Record<SoundType, string> = {
-  card_flip: "/assets/sounds/card-flip.mp3",
-  card_play: "/assets/sounds/card-play.mp3",
-  card_draw: "/assets/sounds/card-draw.mp3",
-  night_begin: "/assets/sounds/night-begin.mp3",
-  dawn: "/assets/sounds/dawn.mp3",
-  gavel: "/assets/sounds/gavel.mp3",
-  death: "/assets/sounds/death.mp3",
-  tick: "/assets/sounds/tick.mp3",
-  victory: "/assets/sounds/victory.mp3",
+  card_flip: "/assets/sounds/card-flip.wav",
+  card_play: "/assets/sounds/card-play.wav",
+  card_draw: "/assets/sounds/card-draw.wav",
+  night_begin: "/assets/sounds/night-begin.wav",
+  dawn: "/assets/sounds/dawn.wav",
+  gavel: "/assets/sounds/gavel.wav",
+  death: "/assets/sounds/death.wav",
+  tick: "/assets/sounds/tick.wav",
+  victory: "/assets/sounds/victory.wav",
 };
 
 export interface UseSoundReturn {

@@ -357,6 +357,14 @@ export class SalemRoom extends Room<SalemState> {
       this.engine.handleConfess(playerId, cardIndex);
     });
 
+    this.onMessage("decline_confess", (client) => {
+      if (!this.engine) return;
+      const playerId = this.playerSessionMap.get(client.sessionId);
+      if (!playerId) return;
+
+      this.engine.handleDeclineConfess(playerId);
+    });
+
     this.onMessage("conspiracy_pass", (client, message) => {
       if (!this.engine) return;
       const playerId = this.playerSessionMap.get(client.sessionId);

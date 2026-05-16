@@ -42,6 +42,7 @@ export class GameEngine {
   private witchKillTargetId: string = "";
   private constableProtectTargetId: string = "";
   private confessedPlayerIds: Set<string> = new Set();
+  private declinedConfessPlayerIds: Set<string> = new Set();
   private witchVotes: Map<string, string> = new Map();
   private witchConfirmed: Set<string> = new Set();
 
@@ -215,6 +216,10 @@ export class GameEngine {
     this.broadcast("sound_effect", { sound: "dawn" });
     this.addLog("黎明 -- 女巫放置黑猫");
 
+    for (const player of this.state.players.values()) {
+      this.sendRoleInfo(player.id);
+    }
+
     this.startTimer(TIMER_DEFAULTS.dawn, () => {
       // If witches did not place black cat, assign randomly
       if (!this.state.blackCatOwnerId) {
@@ -369,6 +374,7 @@ export class GameEngine {
   }
 
   private handleNightConfessPhase(): void {
+    this.declinedConfessPlayerIds.clear();
     this.addLog("认罪窗口 -- 翻开一张审判卡来渡过夜晚");
 
     this.startTimer(TIMER_DEFAULTS.nightConfess, () => {
@@ -812,6 +818,35 @@ export class GameEngine {
     const winResult = this.checkWin();
     if (winResult.gameOver) {
       this.handleGameOver(winResult);
+      return true;
+    }
+
+    // Auto-skip if all alive players have decided
+    const aliveCount = this.getAlivePlayers().length;
+    const decidedCount = this.confessedPlayerIds.size + this.declinedConfessPlayerIds.size;
+    if (decidedCount >= aliveCount) {
+      this.transitionTo("night_resolve");
+    }
+
+    return true;
+  }
+
+  handleDeclineConfess(playerId: string): boolean {
+    if (this.state.gamePhase !== "night_confess") return false;
+    if (this.state.isPaused) return false;
+
+    const player = this.state.players.get(playerId);
+    if (!player || !player.isAlive) return false;
+
+    if (this.confessedPlayerIds.has(playerId)) return false;
+    if (this.declinedConfessPlayerIds.has(playerId)) return false;
+
+    this.declinedConfessPlayerIds.add(playerId);
+
+    const aliveCount = this.getAlivePlayers().length;
+    const decidedCount = this.confessedPlayerIds.size + this.declinedConfessPlayerIds.size;
+    if (decidedCount >= aliveCount) {
+      this.transitionTo("night_resolve");
     }
 
     return true;

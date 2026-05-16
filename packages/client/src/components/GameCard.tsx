@@ -39,7 +39,7 @@ export default function GameCard({ cardType, selected, disabled, onSelect, testI
     return (
       <button
         data-testid={testId}
-        className={`shrink-0 w-[72px] h-[48px] rounded-md border border-salem-accent-gold/15 border-l-[3px] ${COLOR_BORDERS[def.color]}
+        className={`shrink-0 w-[88px] h-[56px] rounded-md border border-salem-accent-gold/15 border-l-[3px] ${COLOR_BORDERS[def.color]}
           bg-gradient-to-b from-salem-bg-card-dark to-salem-bg-card-folded
           flex flex-col items-center justify-center px-1 text-center overflow-hidden
           transition-all duration-200
@@ -53,7 +53,7 @@ export default function GameCard({ cardType, selected, disabled, onSelect, testI
           {def.nameCn}
         </span>
         {def.accusationValue !== undefined && def.accusationValue > 0 && (
-          <span className={`text-[9px] font-heading font-bold rounded-full px-1 ${COLOR_VALUE_BG[def.color]}`}>
+          <span className={`text-[9px] font-heading font-bold rounded-full px-1 mt-0.5 ${COLOR_VALUE_BG[def.color]}`}>
             +{def.accusationValue}
           </span>
         )}

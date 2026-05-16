@@ -50,11 +50,11 @@ export default function ConspiracyOverlay({
     sourcePlayer.tryalCards.length,
   );
   const cardSlots = Array.from({ length: cardCount }, (_, index) => {
-    const publicCard = parseTryalCard(sourcePlayer.publicTryalCards[index]);
+    const parsed = parseTryalCard(sourcePlayer.publicTryalCards[index]);
     return {
       index,
-      publicCard,
-      faceUp: Boolean(publicCard) || index < sourcePlayer.tryalCardFaceUp,
+      publicCard: parsed?.type ? parsed : null,
+      faceUp: parsed?.faceUp ?? false,
     };
   });
   const selectableSlots = cardSlots.filter((c) => !c.faceUp);
@@ -81,7 +81,7 @@ export default function ConspiracyOverlay({
               key={card.index}
               data-testid={`conspiracy-card-${card.index}`}
               className={`flex h-24 w-16 items-center justify-center rounded-card border-2 text-sm font-bold transition-all
-                ${card.publicCard
+                ${card.publicCard?.type
                   ? TRYAL_CARD_CLASSES[card.publicCard.type]
                   : card.faceUp
                   ? "border-salem-text-secondary/40 bg-salem-bg-secondary text-salem-text-secondary"
@@ -89,7 +89,7 @@ export default function ConspiracyOverlay({
               disabled={card.faceUp}
               onClick={() => onChoose(card.index)}
             >
-              {card.publicCard ? TRYAL_LABELS[card.publicCard.type] : card.faceUp ? "已公开" : "?"}
+              {card.publicCard?.type ? TRYAL_LABELS[card.publicCard.type] : card.faceUp ? "已公开" : "?"}
             </button>
           ))}
         </div>

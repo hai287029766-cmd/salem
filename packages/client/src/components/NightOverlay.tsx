@@ -3,6 +3,7 @@ import { Check, Moon, Skull, Users } from "lucide-react";
 import type { GamePhase } from "@salem/shared";
 import type { TryalCardType } from "@salem/shared";
 import type { PlayerState, RoleInfo, WitchVoteState } from "../hooks/useGameState";
+import { parseTryalCard } from "../utils/tryalCardParser";
 import Timer from "./Timer";
 
 interface NightOverlayProps {
@@ -17,13 +18,9 @@ interface NightOverlayProps {
   witchVoteState: WitchVoteState | null;
   onConstableProtect: (targetId: string) => void;
   onConfess: (cardIndex: number) => void;
+  onDeclineConfess: () => void;
   onShowConfess: () => void;
   showConfess: boolean;
-}
-
-interface ParsedTryalCard {
-  type: TryalCardType;
-  faceUp: boolean;
 }
 
 const TRYAL_LABELS: Record<TryalCardType, string> = {
@@ -38,27 +35,6 @@ const TRYAL_STYLES: Record<TryalCardType, string> = {
   constable: "border-salem-constable bg-salem-constable/30 text-salem-text-primary",
 };
 
-function parseTryalCard(value: string | undefined): ParsedTryalCard | null {
-  if (!value) return null;
-  if (value === "witch" || value === "not_witch" || value === "constable") {
-    return { type: value, faceUp: true };
-  }
-
-  try {
-    const parsed = JSON.parse(value) as Partial<ParsedTryalCard>;
-    if (parsed.type === "witch" || parsed.type === "not_witch" || parsed.type === "constable") {
-      return {
-        type: parsed.type,
-        faceUp: parsed.faceUp ?? true,
-      };
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
-}
-
 export default function NightOverlay({
   phase,
   roleInfo,
@@ -71,6 +47,7 @@ export default function NightOverlay({
   witchVoteState,
   onConstableProtect,
   onConfess,
+  onDeclineConfess,
   onShowConfess,
   showConfess,
 }: NightOverlayProps) {
@@ -112,10 +89,17 @@ export default function NightOverlay({
         showConfess={showConfess}
         onShowConfess={onShowConfess}
         onConfess={onConfess}
+        onDeclineConfess={onDeclineConfess}
         myPlayer={players.find((p) => p.id === myId)}
       />
     );
   }
+
+  const nightMessage = phase === "night_constable"
+    ? "警长正在选择保护对象..."
+    : phase === "night_resolve"
+      ? "命运正在揭晓..."
+      : "女巫正在密谋...";
 
   // Default night view (non-witch, non-constable)
   return (
@@ -135,7 +119,7 @@ export default function NightOverlay({
       />
 
       <p className="font-heading text-xl text-salem-text-primary/80 mb-2">
-        女巫正在密谋...
+        {nightMessage}
       </p>
       <Timer seconds={timer} isPaused={false} />
     </div>
@@ -351,14 +335,18 @@ function ConfessView({
   showConfess,
   onShowConfess,
   onConfess,
+  onDeclineConfess,
   myPlayer,
 }: {
   timer: number;
   showConfess: boolean;
   onShowConfess: () => void;
   onConfess: (cardIndex: number) => void;
+  onDeclineConfess: () => void;
   myPlayer: PlayerState | undefined;
 }) {
+  const [declined, setDeclined] = useState(false);
+
   if (!myPlayer) return null;
 
   const cardCount = Math.max(myPlayer.tryalCardCount, myPlayer.tryalCards.length);
@@ -366,8 +354,8 @@ function ConfessView({
     const parsed = parseTryalCard(myPlayer.tryalCards[index]);
     return {
       index,
-      type: parsed?.type,
-      faceUp: parsed?.faceUp ?? index < myPlayer.tryalCardFaceUp,
+      type: parsed?.type ?? null,
+      faceUp: parsed?.faceUp ?? false,
     };
   });
   const availableCards = cards.filter((card) => !card.faceUp);
@@ -388,14 +376,25 @@ function ConfessView({
       </p>
       <Timer seconds={timer} isPaused={false} />
 
-      {!showConfess ? (
-        <button
-          data-testid="night-confess-open"
-          className="btn-danger mt-6"
-          onClick={onShowConfess}
-        >
-          我要认罪
-        </button>
+      {declined ? (
+        <p className="mt-6 text-sm text-salem-text-secondary">已选择不认罪，等待其他玩家...</p>
+      ) : !showConfess ? (
+        <div className="mt-6 flex gap-3">
+          <button
+            data-testid="night-confess-open"
+            className="btn-danger"
+            onClick={onShowConfess}
+          >
+            我要认罪
+          </button>
+          <button
+            data-testid="night-confess-decline"
+            className="btn-primary"
+            onClick={() => { setDeclined(true); onDeclineConfess(); }}
+          >
+            不认罪
+          </button>
+        </div>
       ) : (
         <div className="mt-6 space-y-3">
           <p className="text-sm text-salem-text-primary text-center">

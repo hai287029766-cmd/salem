@@ -21,6 +21,7 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import TryalOverlay from "../components/TryalOverlay";
 import ConspiracyOverlay from "../components/ConspiracyOverlay";
 import DawnBlackCatOverlay from "../components/DawnBlackCatOverlay";
+import PhaseTransition from "../components/PhaseTransition";
 
 type ActionMode = "idle" | "play_card" | "select_target";
 type TabId = "game" | "log";
@@ -44,7 +45,7 @@ export default function Game() {
   const navigate = useNavigate();
   const { room: activeRoom, joinRoom, sendMessage } = useColyseus();
   const [room, setRoom] = useState<Room | null>(activeRoom);
-  const { state, myId, roleInfo, logs, gameResult, witchVoteState } = useGameState(room);
+  const { state, myId, roleInfo, logs, gameResult, witchVoteState, lastEvent } = useGameState(room);
   const { play } = useSound();
 
   const [actionMode, setActionMode] = useState<ActionMode>("idle");
@@ -98,6 +99,12 @@ export default function Game() {
   const phase = state?.gamePhase ?? "lobby";
   const isNightPhase = phase === "night_witch" || phase === "night_constable" || phase === "night_confess" || phase === "night_resolve";
   const canEndTurn = isMyTurn && Boolean(state?.currentTurnCanEnd || playedThisTurn);
+
+  useEffect(() => {
+    if (lastEvent?.type === "sound_effect" && lastEvent.sound) {
+      play(lastEvent.sound);
+    }
+  }, [lastEvent, play]);
 
   // Auto-expand current turn player
   useEffect(() => {
@@ -216,6 +223,10 @@ export default function Game() {
     setShowConfessConfirm(true);
   }, []);
 
+  const handleDeclineConfess = useCallback(() => {
+    sendMessage({ type: "decline_confess" });
+  }, [sendMessage]);
+
   const confirmConfess = useCallback(() => {
     if (selectedConfessIndex >= 0) {
       sendMessage({ type: "confess", cardIndex: selectedConfessIndex });
@@ -314,6 +325,7 @@ export default function Game() {
           selectedCardIndexes={selectedCardIndexes}
           onSelectCard={handleSelectCard}
           disabled={!isMyTurn || actionMode === "idle"}
+          isPlayMode={actionMode !== "idle"}
           characterName={myPlayer.characterName}
           characterLabel={
             CHARACTER_DEFINITIONS.find((c) => c.name === myPlayer.characterName)?.nameCn
@@ -360,6 +372,7 @@ export default function Game() {
           witchVoteState={witchVoteState}
           onConstableProtect={handleConstableProtect}
           onConfess={handleConfess}
+          onDeclineConfess={handleDeclineConfess}
           onShowConfess={() => setShowConfess(true)}
           showConfess={showConfess}
         />
@@ -376,7 +389,7 @@ export default function Game() {
       )}
 
       {phase === "tryal" && (
-        <TryalOverlay state={state} myId={myId} onChoose={handleTryalChoice} />
+        <TryalOverlay state={state} myId={myId} onChoose={handleTryalChoice} lastEvent={lastEvent} />
       )}
 
       {phase === "conspiracy" && (
@@ -407,6 +420,8 @@ export default function Game() {
           onCancel={() => { setShowConfessConfirm(false); setSelectedConfessIndex(-1); }}
         />
       )}
+
+      <PhaseTransition phase={phase} />
     </div>
   );
 }
