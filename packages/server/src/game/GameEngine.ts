@@ -43,6 +43,7 @@ export class GameEngine {
   private constableProtectTargetId: string = "";
   private confessedPlayerIds: Set<string> = new Set();
   private witchVotes: Map<string, string> = new Map();
+  private witchConfirmed: Set<string> = new Set();
 
   // Conspiracy state
   private conspiracyChoices: Map<string, number> = new Map();
@@ -308,6 +309,7 @@ export class GameEngine {
   private handleNightWitchPhase(): void {
     this.witchKillTargetId = "";
     this.witchVotes.clear();
+    this.witchConfirmed.clear();
     this.confessedPlayerIds.clear();
     this.constableProtectTargetId = "";
 
@@ -324,16 +326,19 @@ export class GameEngine {
     }
 
     this.startTimer(TIMER_DEFAULTS.nightWitch, () => {
-      // If no vote, pick random target
-      if (!this.witchKillTargetId) {
-        const nonWitchAlive = this.getAlivePlayers().filter((p) => !p.hasBeenWitch);
-        if (nonWitchAlive.length > 0) {
-          this.witchKillTargetId = nonWitchAlive[
-            Math.floor(Math.random() * nonWitchAlive.length)
-          ].id;
+      // Auto-confirm all unconfirmed witches; assign random target to those without a vote
+      const aliveWitches = this.getAlivePlayers().filter((p) => p.hasBeenWitch);
+      const nonWitchAlive = this.getAlivePlayers().filter((p) => !p.hasBeenWitch);
+      for (const w of aliveWitches) {
+        if (!this.witchVotes.has(w.id) && nonWitchAlive.length > 0) {
+          this.witchVotes.set(
+            w.id,
+            nonWitchAlive[Math.floor(Math.random() * nonWitchAlive.length)].id,
+          );
         }
+        this.witchConfirmed.add(w.id);
       }
-      this.transitionTo("night_constable");
+      this.resolveWitchVotes();
     });
   }
 
@@ -644,38 +649,105 @@ export class GameEngine {
     const target = this.state.players.get(targetId);
     if (!target || !target.isAlive) return false;
 
-    // Record witch vote
+    // Backward-compatible: vote + immediate confirm
     this.witchVotes.set(playerId, targetId);
+    this.witchConfirmed.add(playerId);
+    this.broadcastWitchVoteState();
 
-    // Check if all living witches have voted
     const aliveWitches = this.getAlivePlayers().filter((p) => p.hasBeenWitch);
-    const allVoted = aliveWitches.every((w) => this.witchVotes.has(w.id));
+    const allConfirmed = aliveWitches.every((w) => this.witchConfirmed.has(w.id));
 
-    if (allVoted) {
-      // Use majority vote, or first vote if tied
-      const voteCounts = new Map<string, number>();
-      for (const [, target] of this.witchVotes) {
-        voteCounts.set(target, (voteCounts.get(target) ?? 0) + 1);
-      }
-
-      let maxVotes = 0;
-      let chosenTarget = "";
-      for (const [target, count] of voteCounts) {
-        if (count > maxVotes) {
-          maxVotes = count;
-          chosenTarget = target;
-        }
-      }
-
-      this.witchKillTargetId = chosenTarget;
-      this.addLog("女巫已选择击杀目标");
-
-      // Advance immediately
-      this.clearTimer();
-      this.transitionTo("night_constable");
+    if (allConfirmed) {
+      this.resolveWitchVotes();
     }
 
     return true;
+  }
+
+  handleWitchVote(playerId: string, targetId: string): boolean {
+    if (this.state.gamePhase !== "night_witch") return false;
+    if (this.state.isPaused) return false;
+
+    const player = this.state.players.get(playerId);
+    if (!player || !player.hasBeenWitch || !player.isAlive) return false;
+    if (this.witchConfirmed.has(playerId)) return false;
+
+    const target = this.state.players.get(targetId);
+    if (!target || !target.isAlive) return false;
+
+    this.witchVotes.set(playerId, targetId);
+    this.broadcastWitchVoteState();
+    return true;
+  }
+
+  handleWitchConfirm(playerId: string): boolean {
+    if (this.state.gamePhase !== "night_witch") return false;
+    if (this.state.isPaused) return false;
+
+    const player = this.state.players.get(playerId);
+    if (!player || !player.hasBeenWitch || !player.isAlive) return false;
+    if (this.witchConfirmed.has(playerId)) return false;
+    if (!this.witchVotes.has(playerId)) return false;
+
+    this.witchConfirmed.add(playerId);
+    this.broadcastWitchVoteState();
+
+    const aliveWitches = this.getAlivePlayers().filter((p) => p.hasBeenWitch);
+    const allConfirmed = aliveWitches.every((w) => this.witchConfirmed.has(w.id));
+
+    if (allConfirmed) {
+      this.resolveWitchVotes();
+    }
+
+    return true;
+  }
+
+  private resolveWitchVotes(): void {
+    const voteCounts = new Map<string, number>();
+    for (const [, target] of this.witchVotes) {
+      voteCounts.set(target, (voteCounts.get(target) ?? 0) + 1);
+    }
+
+    let maxVotes = 0;
+    let chosenTarget = "";
+    for (const [target, count] of voteCounts) {
+      if (count > maxVotes) {
+        maxVotes = count;
+        chosenTarget = target;
+      }
+    }
+
+    this.witchKillTargetId = chosenTarget;
+    this.addLog("女巫已选择击杀目标");
+
+    this.clearTimer();
+    this.transitionTo("night_constable");
+  }
+
+  private broadcastWitchVoteState(): void {
+    const aliveWitches = this.getAlivePlayers().filter((p) => p.hasBeenWitch);
+    const witchPlayerIds = aliveWitches.map((w) => w.id);
+
+    const votes: Record<string, string> = {};
+    for (const [witchId, targetId] of this.witchVotes) {
+      votes[witchId] = targetId;
+    }
+
+    const confirmed = Array.from(this.witchConfirmed);
+
+    const voteCounts: Record<string, number> = {};
+    for (const targetId of this.witchVotes.values()) {
+      voteCounts[targetId] = (voteCounts[targetId] ?? 0) + 1;
+    }
+
+    for (const witch of aliveWitches) {
+      this.sendToPlayer(witch.id, "witch_vote_update", {
+        votes,
+        confirmed,
+        voteCounts,
+        witchPlayerIds,
+      });
+    }
   }
 
   handleConstableProtect(playerId: string, targetId: string): boolean {

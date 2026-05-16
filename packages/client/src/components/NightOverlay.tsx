@@ -1,8 +1,8 @@
 import { useState, useCallback } from "react";
-import { Moon, Mic } from "lucide-react";
+import { Check, Moon, Skull, Users } from "lucide-react";
 import type { GamePhase } from "@salem/shared";
 import type { TryalCardType } from "@salem/shared";
-import type { PlayerState, RoleInfo } from "../hooks/useGameState";
+import type { PlayerState, RoleInfo, WitchVoteState } from "../hooks/useGameState";
 import Timer from "./Timer";
 
 interface NightOverlayProps {
@@ -11,7 +11,10 @@ interface NightOverlayProps {
   players: PlayerState[];
   myId: string;
   timer: number;
+  onWitchVote: (targetId: string) => void;
+  onWitchConfirm: () => void;
   onWitchKill: (targetId: string) => void;
+  witchVoteState: WitchVoteState | null;
   onConstableProtect: (targetId: string) => void;
   onConfess: (cardIndex: number) => void;
   onShowConfess: () => void;
@@ -62,7 +65,10 @@ export default function NightOverlay({
   players,
   myId,
   timer,
+  onWitchVote,
+  onWitchConfirm,
   onWitchKill,
+  witchVoteState,
   onConstableProtect,
   onConfess,
   onShowConfess,
@@ -71,13 +77,16 @@ export default function NightOverlay({
   const isWitch = roleInfo?.isWitch ?? false;
   const isConstable = roleInfo?.isConstable ?? false;
 
-  // Witch view during witch phase
   if (phase === "night_witch" && isWitch) {
     return (
       <WitchView
         players={players}
         myId={myId}
         timer={timer}
+        roleInfo={roleInfo}
+        witchVoteState={witchVoteState}
+        onVote={onWitchVote}
+        onConfirm={onWitchConfirm}
         onKill={onWitchKill}
       />
     );
@@ -137,66 +146,142 @@ function WitchView({
   players,
   myId,
   timer,
+  roleInfo,
+  witchVoteState,
+  onVote,
+  onConfirm,
   onKill,
 }: {
   players: PlayerState[];
   myId: string;
   timer: number;
+  roleInfo: RoleInfo | null;
+  witchVoteState: WitchVoteState | null;
+  onVote: (targetId: string) => void;
+  onConfirm: () => void;
   onKill: (targetId: string) => void;
 }) {
-  const [selected, setSelected] = useState<string | null>(null);
+  const [localSelected, setLocalSelected] = useState<string | null>(null);
   const targets = players.filter((p) => p.isAlive && p.id !== myId);
+  const witchPartners = roleInfo?.witchPartners ?? [];
+  const witchPlayerIds = witchVoteState?.witchPlayerIds ?? [];
 
-  const handleConfirm = useCallback(() => {
-    if (selected) {
-      onKill(selected);
+  const myVote = witchVoteState?.votes[myId] ?? localSelected;
+  const isConfirmed = witchVoteState?.confirmed.includes(myId) ?? false;
+
+  const handleSelect = useCallback((targetId: string) => {
+    if (isConfirmed) return;
+    setLocalSelected(targetId);
+    onVote(targetId);
+  }, [isConfirmed, onVote]);
+
+  const handleConfirmClick = useCallback(() => {
+    if (myVote && !isConfirmed) {
+      onConfirm();
     }
-  }, [selected, onKill]);
+  }, [myVote, isConfirmed, onConfirm]);
+
+  const handleLegacyKill = useCallback(() => {
+    if (myVote && !isConfirmed) {
+      onKill(myVote);
+    }
+  }, [myVote, isConfirmed, onKill]);
+
+  const partnerNames = witchPartners
+    .filter((id) => id !== myId)
+    .map((id) => players.find((p) => p.id === id)?.name)
+    .filter(Boolean);
 
   return (
     <div className="absolute inset-0 z-40 flex flex-col bg-salem-witch/95 px-4 py-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-3">
         <h2 className="font-heading text-lg text-salem-accent-gold">
           夜间 - 女巫行动
         </h2>
         <Timer seconds={timer} isPaused={false} />
       </div>
 
-      <p className="text-sm text-salem-text-primary mb-4">选择今晚的击杀目标:</p>
-
-      <div className="grid grid-cols-2 gap-3 flex-1 overflow-y-auto">
-        {targets.map((p) => (
-          <button
-            key={p.id}
-            data-testid={`night-witch-target-${p.seatIndex}`}
-            className={`px-3 py-3 rounded-card text-sm text-left transition-all
-              ${selected === p.id
-                ? "bg-salem-accent-red/30 border-2 border-salem-accent-red"
-                : "bg-salem-bg-secondary/40 border border-salem-text-secondary/30"}`}
-            onClick={() => setSelected(p.id)}
-          >
-            {p.name}
-          </button>
-        ))}
-      </div>
-
-      {selected && (
-        <p className="text-sm text-salem-text-secondary mt-3">
-          已选: {targets.find((p) => p.id === selected)?.name}
-        </p>
+      {partnerNames.length > 0 && (
+        <div className="flex items-center gap-2 mb-3 px-2.5 py-1.5 rounded-card bg-[#5a3060]/30 border border-[#c090e0]/25">
+          <Users size={14} className="text-[#c090e0] shrink-0" />
+          <span className="text-[12px] text-[#c090e0]">
+            队友: {partnerNames.join(", ")}
+          </span>
+        </div>
       )}
 
-      <button
-        className="btn-danger w-full mt-4"
-        disabled={!selected}
-        onClick={handleConfirm}
-      >
-        确认击杀
-      </button>
+      <p className="text-sm text-salem-text-primary mb-3">选择今晚的击杀目标:</p>
 
-      <div className="flex items-center gap-2 mt-3 text-sm text-salem-text-secondary">
-        <Mic size={14} />
-        <span>女巫私密语音频道</span>
+      <div className="grid grid-cols-2 gap-3 flex-1 overflow-y-auto">
+        {targets.map((p) => {
+          const voteCount = witchVoteState?.voteCounts[p.id] ?? 0;
+          const isMyChoice = myVote === p.id;
+          const isWitchTeammate = witchPlayerIds.includes(p.id) || witchPartners.includes(p.id);
+
+          return (
+            <button
+              key={p.id}
+              data-testid={`night-witch-target-${p.seatIndex}`}
+              className={`relative px-3 py-3 rounded-card text-sm text-left transition-all
+                ${isMyChoice
+                  ? "bg-salem-accent-red/30 border-2 border-salem-accent-red"
+                  : "bg-salem-bg-secondary/40 border border-salem-text-secondary/30"}
+                ${isConfirmed ? "opacity-60" : ""}`}
+              onClick={() => handleSelect(p.id)}
+              disabled={isConfirmed}
+            >
+              <div className="flex items-center gap-1.5">
+                {isWitchTeammate && (
+                  <Skull size={12} className="text-[#c090e0] shrink-0" />
+                )}
+                <span className={isWitchTeammate ? "text-[#c090e0]" : ""}>
+                  {p.name}
+                </span>
+              </div>
+              {voteCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 min-w-[20px] h-5 flex items-center justify-center rounded-full bg-salem-accent-red/80 text-[11px] font-heading font-bold text-white">
+                  {voteCount}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {witchPlayerIds.length > 1 && witchVoteState && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {witchPlayerIds.map((wId) => {
+            const wName = players.find((p) => p.id === wId)?.name ?? wId;
+            const wConfirmed = witchVoteState.confirmed.includes(wId);
+            const wVoted = wId in witchVoteState.votes;
+            return (
+              <span key={wId} className={`inline-flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 border
+                ${wConfirmed
+                  ? "border-salem-accent-green/40 bg-salem-accent-green/15 text-salem-accent-green"
+                  : wVoted
+                    ? "border-salem-accent-gold/30 bg-salem-accent-gold/10 text-salem-accent-gold"
+                    : "border-salem-text-secondary/30 text-salem-text-secondary"}`}>
+                {wConfirmed && <Check size={10} />}
+                {wId === myId ? "我" : wName}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="mt-3 space-y-2">
+        {!isConfirmed && (
+          <p className="text-[11px] text-salem-accent-red/80 text-center">
+            确认后无法更改选择
+          </p>
+        )}
+        <button
+          className="btn-danger w-full"
+          disabled={!myVote || isConfirmed}
+          onClick={witchPlayerIds.length > 1 ? handleConfirmClick : handleLegacyKill}
+        >
+          {isConfirmed ? "已确认 - 等待队友" : "确认击杀"}
+        </button>
       </div>
     </div>
   );

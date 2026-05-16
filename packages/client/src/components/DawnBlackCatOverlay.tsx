@@ -34,7 +34,11 @@ export default function DawnBlackCatOverlay({
         <Timer seconds={timer} isPaused={false} />
       </div>
 
-      {roleInfo?.isWitch ? (
+      {roleInfo === null ? (
+        <div className="mt-12 flex items-center justify-center">
+          <p className="text-sm text-salem-text-ink animate-pulse">角色确认中...</p>
+        </div>
+      ) : roleInfo.isWitch ? (
         <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {alivePlayers.map((player) => (
             <button

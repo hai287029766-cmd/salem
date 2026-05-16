@@ -9,6 +9,8 @@ export type ClientMessage =
   | { type: "choose_tryal_card"; targetId: string; cardIndex: number }
   | { type: "witch_place_blackcat"; targetId: string }
   | { type: "witch_kill"; targetId: string }
+  | { type: "witch_vote"; targetId: string }
+  | { type: "witch_confirm" }
   | { type: "constable_protect"; targetId: string }
   | { type: "confess"; cardIndex: number }
   | { type: "conspiracy_pass"; cardIndex: number }
@@ -33,6 +35,7 @@ export type ServerEvent =
   | { type: "sound_effect"; sound: SoundType }
   | { type: "your_role"; isWitch: boolean; isConstable: boolean; witchPartners?: string[] }
   | { type: "character_skill_result"; skill: string; deck?: CardType[]; availableCards?: CardType[]; targetId?: string; message?: string }
+  | { type: "witch_vote_update"; votes: Record<string, string>; confirmed: string[]; voteCounts: Record<string, number>; witchPlayerIds: string[] }
   | { type: "paused"; by: string }
   | { type: "resumed"; by: string }
   | { type: "timer_extended"; seconds: number }

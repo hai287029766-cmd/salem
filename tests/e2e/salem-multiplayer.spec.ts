@@ -76,11 +76,11 @@ async function closePlayers(players: TestPlayer[]) {
 
 async function waitForDay(players: TestPlayer[]) {
   await resolveDawn(players);
-  await Promise.all(players.map((player) => expect(player.page.getByTestId("game-phase")).toContainText("白天", { timeout: 20_000 })));
+  await Promise.all(players.map((player) => expect(player.page.getByTestId("game-phase")).toContainText("白天", { timeout: 40_000 })));
 }
 
 async function resolveDawn(players: TestPlayer[]) {
-  const deadline = Date.now() + 12_000;
+  const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
     for (const player of players) {
       const target = player.page.locator('[data-testid^="dawn-black-cat-target-"]').first();

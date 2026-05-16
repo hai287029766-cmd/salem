@@ -316,6 +316,25 @@ export class SalemRoom extends Room<SalemState> {
       this.engine.handleWitchKill(playerId, targetId);
     });
 
+    this.onMessage("witch_vote", (client, message) => {
+      if (!this.engine) return;
+      const playerId = this.playerSessionMap.get(client.sessionId);
+      if (!playerId) return;
+
+      const targetId = message?.targetId as string | undefined;
+      if (!targetId) return;
+
+      this.engine.handleWitchVote(playerId, targetId);
+    });
+
+    this.onMessage("witch_confirm", (client) => {
+      if (!this.engine) return;
+      const playerId = this.playerSessionMap.get(client.sessionId);
+      if (!playerId) return;
+
+      this.engine.handleWitchConfirm(playerId);
+    });
+
     this.onMessage("constable_protect", (client, message) => {
       if (!this.engine) return;
       const playerId = this.playerSessionMap.get(client.sessionId);

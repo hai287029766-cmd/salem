@@ -58,6 +58,13 @@ export interface RoleInfo {
   witchPartners: string[];
 }
 
+export interface WitchVoteState {
+  votes: Record<string, string>;
+  confirmed: string[];
+  voteCounts: Record<string, number>;
+  witchPlayerIds: string[];
+}
+
 export interface UseGameStateReturn {
   state: GameState | null;
   myId: string | null;
@@ -65,6 +72,7 @@ export interface UseGameStateReturn {
   logs: string[];
   lastEvent: ServerEvent | null;
   gameResult: { winner: "townspeople" | "witches"; reveals: RevealEntry[] } | null;
+  witchVoteState: WitchVoteState | null;
 }
 
 const DEFAULT_STATE: GameState = {
@@ -137,6 +145,7 @@ export function useGameState(room: Room | null): UseGameStateReturn {
   const [logs, setLogs] = useState<string[]>([]);
   const [lastEvent, setLastEvent] = useState<ServerEvent | null>(null);
   const [gameResult, setGameResult] = useState<{ winner: "townspeople" | "witches"; reveals: RevealEntry[] } | null>(null);
+  const [witchVoteState, setWitchVoteState] = useState<WitchVoteState | null>(null);
 
   const handleStateChange = useCallback((roomState: Record<string, unknown>) => {
     const players = new Map<string, PlayerState>();
@@ -183,6 +192,7 @@ export function useGameState(room: Room | null): UseGameStateReturn {
       setRoleInfo(null);
       setLogs([]);
       setGameResult(null);
+      setWitchVoteState(null);
       return;
     }
 
@@ -220,6 +230,10 @@ export function useGameState(room: Room | null): UseGameStateReturn {
       });
     });
 
+    room.onMessage("witch_vote_update", (data: WitchVoteState) => {
+      setWitchVoteState(data);
+    });
+
     room.onMessage("*", (type, message) => {
       setLastEvent({ type, ...message } as unknown as ServerEvent);
     });
@@ -229,6 +243,12 @@ export function useGameState(room: Room | null): UseGameStateReturn {
     };
   }, [room, handleStateChange]);
 
+  useEffect(() => {
+    if (state?.gamePhase !== "night_witch") {
+      setWitchVoteState(null);
+    }
+  }, [state?.gamePhase]);
+
   return {
     state: state || DEFAULT_STATE,
     myId,
@@ -236,5 +256,6 @@ export function useGameState(room: Room | null): UseGameStateReturn {
     logs,
     lastEvent,
     gameResult,
+    witchVoteState,
   };
 }

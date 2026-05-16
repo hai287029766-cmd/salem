@@ -1,14 +1,15 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Layers, ScrollText, Users } from "lucide-react";
+import { BookOpen, ScrollText, Users } from "lucide-react";
 import { useColyseus } from "../hooks/useColyseus";
 import { useGameState } from "../hooks/useGameState";
 import { useVoiceConnection } from "../hooks/useVoiceConnection";
 import { useSound } from "../hooks/useSound";
 import type { Room } from "colyseus.js";
 import type { CardType } from "@salem/shared";
+import { CHARACTER_DEFINITIONS } from "@salem/shared";
 import PlayerSeat from "../components/PlayerSeat";
-import CardHand from "../components/CardHand";
+import CardHandStrip from "../components/CardHandStrip";
 import ActionPanel from "../components/ActionPanel";
 import CoordinatorBar from "../components/CoordinatorBar";
 import Timer from "../components/Timer";
@@ -17,13 +18,12 @@ import VoicePanel from "../components/VoicePanel";
 import NightOverlay from "../components/NightOverlay";
 import PauseOverlay from "../components/PauseOverlay";
 import ConfirmDialog from "../components/ConfirmDialog";
-import CharacterCard from "../components/CharacterCard";
 import TryalOverlay from "../components/TryalOverlay";
 import ConspiracyOverlay from "../components/ConspiracyOverlay";
 import DawnBlackCatOverlay from "../components/DawnBlackCatOverlay";
 
 type ActionMode = "idle" | "play_card" | "select_target";
-type TabId = "players" | "hand" | "log";
+type TabId = "game" | "log";
 
 const PHASE_LABELS: Record<string, { name: string; sub: string }> = {
   lobby: { name: "大厅", sub: "等待中" },
@@ -44,7 +44,7 @@ export default function Game() {
   const navigate = useNavigate();
   const { room: activeRoom, joinRoom, sendMessage } = useColyseus();
   const [room, setRoom] = useState<Room | null>(activeRoom);
-  const { state, myId, roleInfo, logs, gameResult } = useGameState(room);
+  const { state, myId, roleInfo, logs, gameResult, witchVoteState } = useGameState(room);
   const { play } = useSound();
 
   const [actionMode, setActionMode] = useState<ActionMode>("idle");
@@ -55,7 +55,7 @@ export default function Game() {
   const [selectedConfessIndex, setSelectedConfessIndex] = useState<number>(-1);
   const [conspiracySubmitted, setConspiracySubmitted] = useState(false);
   const [playedThisTurn, setPlayedThisTurn] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabId>("players");
+  const [activeTab, setActiveTab] = useState<TabId>("game");
   const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -114,11 +114,6 @@ export default function Game() {
     setSelectedCardIndexes([]);
   }, [state?.currentPlayerId, phase]);
 
-  // Auto-switch to hand tab when it's my turn (to see cards)
-  useEffect(() => {
-    if (isMyTurn && activeTab === "players") setActiveTab("hand");
-  }, [isMyTurn]);
-
   const handleTogglePlayer = useCallback((playerId: string) => {
     setExpandedPlayerId((prev) => (prev === playerId ? null : playerId));
   }, []);
@@ -138,7 +133,6 @@ export default function Game() {
       return [...prev, card];
     });
     setActionMode("select_target");
-    setActiveTab("players");
   }, [selectedCardIndexes]);
 
   const handleTargetPlayer = useCallback((targetId: string) => {
@@ -162,7 +156,6 @@ export default function Game() {
 
   const handlePlayMode = useCallback(() => {
     setActionMode("play_card");
-    setActiveTab("hand");
   }, []);
 
   const handleCancelPlayMode = useCallback(() => {
@@ -199,6 +192,14 @@ export default function Game() {
 
   const handleWitchKill = useCallback((targetId: string) => {
     sendMessage({ type: "witch_kill", targetId });
+  }, [sendMessage]);
+
+  const handleWitchVote = useCallback((targetId: string) => {
+    sendMessage({ type: "witch_vote", targetId });
+  }, [sendMessage]);
+
+  const handleWitchConfirm = useCallback(() => {
+    sendMessage({ type: "witch_confirm" });
   }, [sendMessage]);
 
   const handleWitchPlaceBlackCat = useCallback((targetId: string) => {
@@ -250,6 +251,10 @@ export default function Game() {
       {/* === Top bar: wax seal + phase + timer === */}
       <header className="flex items-center justify-between px-3 py-2 border-b border-salem-accent-gold/15">
         <WaxSealRound round={state.round} />
+        <div data-testid="game-deck-remaining" className="flex items-center gap-1 text-salem-text-ink">
+          <BookOpen size={13} className="opacity-60" />
+          <span className="text-xs font-heading">{state.deckRemaining}</span>
+        </div>
         <div className="text-right">
           <div data-testid="game-phase" className="font-heading text-base text-salem-accent-gold tracking-wide">
             {phaseInfo.name}
@@ -275,9 +280,9 @@ export default function Game() {
       )}
 
       {/* === Main content (tab-driven) === */}
-      <div className="flex-1 overflow-y-auto pb-32">
-        {/* PLAYERS tab */}
-        {activeTab === "players" && (
+      <div className="flex-1 overflow-y-auto pb-40">
+        {/* GAME tab — unified players + hand */}
+        {activeTab === "game" && (
           <div className="flex flex-col gap-2 px-3 py-3">
             {players.map((player) => (
               <PlayerSeat
@@ -296,33 +301,28 @@ export default function Game() {
           </div>
         )}
 
-        {/* HAND tab */}
-        {activeTab === "hand" && myPlayer && (
-          <div className="px-3 py-4 space-y-4">
-            {myPlayer.characterName && (
-              <CharacterCard
-                characterName={myPlayer.characterName}
-                ability={myPlayer.characterAbility}
-                testId="game-my-character-card"
-                onUseSkill={handleUseCharacterSkill}
-                skillDisabled={!isMyTurn && myPlayer.characterName !== "john_proctor"}
-                skillLabel={getSkillButtonLabel(myPlayer.characterName)}
-              />
-            )}
-            <CardHand
-              cards={myPlayer.handCards}
-              selectedCardIndexes={selectedCardIndexes}
-              onSelectCard={handleSelectCard}
-              disabled={!isMyTurn || actionMode === "idle"}
-            />
-          </div>
-        )}
-
         {/* LOG tab - always in DOM for state tracking, hidden when inactive */}
         <div className={activeTab === "log" ? "px-3 py-3" : "sr-only"}>
           <GameLog entries={logs.length > 0 ? logs : state.gameLog} />
         </div>
       </div>
+
+      {/* === Compact hand strip (fixed above action bar) === */}
+      {myPlayer && activeTab === "game" && (
+        <CardHandStrip
+          cards={myPlayer.handCards}
+          selectedCardIndexes={selectedCardIndexes}
+          onSelectCard={handleSelectCard}
+          disabled={!isMyTurn || actionMode === "idle"}
+          characterName={myPlayer.characterName}
+          characterLabel={
+            CHARACTER_DEFINITIONS.find((c) => c.name === myPlayer.characterName)?.nameCn
+          }
+          onUseSkill={handleUseCharacterSkill}
+          skillDisabled={!isMyTurn && myPlayer.characterName !== "john_proctor"}
+          skillLabel={getSkillButtonLabel(myPlayer.characterName)}
+        />
+      )}
 
       {/* === Action bar (always visible during game) === */}
       <ActionPanel
@@ -354,7 +354,10 @@ export default function Game() {
           players={players}
           myId={myId}
           timer={state.timer}
+          onWitchVote={handleWitchVote}
+          onWitchConfirm={handleWitchConfirm}
           onWitchKill={handleWitchKill}
+          witchVoteState={witchVoteState}
           onConstableProtect={handleConstableProtect}
           onConfess={handleConfess}
           onShowConfess={() => setShowConfess(true)}
@@ -429,8 +432,7 @@ function BottomTabs({
   onChangeTab: (tab: TabId) => void;
 }) {
   const tabs: { id: TabId; label: string; icon: typeof Users }[] = [
-    { id: "players", label: "玩家", icon: Users },
-    { id: "hand", label: "手牌", icon: Layers },
+    { id: "game", label: "玩家", icon: Users },
     { id: "log", label: "日志", icon: ScrollText },
   ];
 

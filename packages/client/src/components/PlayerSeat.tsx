@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
+import { useState, useEffect } from "react";
 import {
   Anchor, Cat, ChevronDown, Cross, Flame, Heart, Layers,
-  Scale, Scroll, Shield, Skull, UserRound,
+  Lock, Scale, Scroll, Shield, Skull, UserRound,
 } from "lucide-react";
 import { CHARACTER_DEFINITIONS } from "@salem/shared";
 import type { CharacterName, TryalCardType } from "@salem/shared";
@@ -102,6 +103,9 @@ export default function PlayerSeat({
             </p>
           )}
         </div>
+
+        {/* Compact status badges */}
+        <CompactStatusBadges player={player} />
 
         {/* Identity strip (compact) */}
         <IdentityStrip player={player} isSelf={isSelf} />
@@ -400,28 +404,83 @@ function StatPill({
   );
 }
 
-function StatusBadges({ player }: { player: PlayerState }) {
-  type Badge = { label: string; icon: ReactNode };
-  const badges: Badge[] = [];
-  if (player.hasBlackCat) badges.push({ label: "黑猫", icon: <Cat size={12} /> });
-  if (player.hasAsylum) badges.push({ label: "庇护", icon: <Shield size={12} /> });
-  if (player.hasPiety) badges.push({ label: "虔诚", icon: <Cross size={12} /> });
-  if (player.hasMatchmaker) badges.push({ label: "红线", icon: <Heart size={12} /> });
-  if (player.hasStocks) badges.push({ label: "枷锁", icon: <Skull size={12} /> });
+const STATUS_BADGE_DEFS: {
+  key: keyof PlayerState;
+  label: string;
+  desc: string;
+  icon: ReactNode;
+  iconCompact: ReactNode;
+  colorClass: string;
+}[] = [
+  { key: "hasBlackCat", label: "黑猫", desc: "黑猫持有者先手行动", icon: <Cat size={12} />, iconCompact: <Cat size={11} />, colorClass: "text-[#c090e0] bg-[#5a3060]/25 border-[#c090e0]/30" },
+  { key: "hasAsylum", label: "庇护", desc: "免受夜间击杀", icon: <Shield size={12} />, iconCompact: <Shield size={11} />, colorClass: "text-[#80b8e0] bg-[#3a5060]/25 border-[#80b8e0]/30" },
+  { key: "hasPiety", label: "虔诚", desc: "需要14点指控才能触发审判", icon: <Cross size={12} />, iconCompact: <Cross size={11} />, colorClass: "text-salem-accent-gold bg-salem-accent-gold/10 border-salem-accent-gold/30" },
+  { key: "hasMatchmaker", label: "红线", desc: "与另一名玩家命运绑定", icon: <Heart size={12} />, iconCompact: <Heart size={11} />, colorClass: "text-salem-accent-red bg-salem-accent-red/10 border-salem-accent-red/30" },
+  { key: "hasStocks", label: "枷锁", desc: "跳过下一个回合", icon: <Lock size={12} />, iconCompact: <Lock size={11} />, colorClass: "text-salem-text-secondary bg-salem-text-secondary/10 border-salem-text-secondary/30" },
+];
 
-  if (badges.length === 0) return null;
+function CompactStatusBadges({ player }: { player: PlayerState }) {
+  const [tooltip, setTooltip] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!tooltip) return;
+    const timer = setTimeout(() => setTooltip(null), 3000);
+    return () => clearTimeout(timer);
+  }, [tooltip]);
+
+  const active = STATUS_BADGE_DEFS.filter((b) => player[b.key]);
+  if (active.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {badges.map((b) => (
-        <span
+    <div className="relative flex items-center gap-0.5">
+      {active.map((b) => (
+        <button
           key={b.label}
-          className="inline-flex items-center gap-1 rounded-full border border-salem-accent-gold/20 bg-black/20 px-2 py-1 text-[10px] text-salem-text-primary"
+          className={`w-5 h-5 rounded-full flex items-center justify-center border ${b.colorClass} transition-all`}
+          onClick={(e) => { e.stopPropagation(); setTooltip(tooltip === b.label ? null : b.label); }}
+          aria-label={b.desc}
+        >
+          {b.iconCompact}
+        </button>
+      ))}
+      {tooltip && (
+        <div className="absolute top-full left-0 mt-1 z-30 whitespace-nowrap rounded-md bg-salem-bg-dark border border-salem-accent-gold/20 px-2.5 py-1.5 text-[11px] text-salem-text-primary shadow-lg">
+          {active.find((b) => b.label === tooltip)?.desc}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusBadges({ player }: { player: PlayerState }) {
+  const [tooltip, setTooltip] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!tooltip) return;
+    const timer = setTimeout(() => setTooltip(null), 3000);
+    return () => clearTimeout(timer);
+  }, [tooltip]);
+
+  const active = STATUS_BADGE_DEFS.filter((b) => player[b.key]);
+  if (active.length === 0) return null;
+
+  return (
+    <div className="relative flex flex-wrap gap-1.5">
+      {active.map((b) => (
+        <button
+          key={b.label}
+          className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] ${b.colorClass} transition-all`}
+          onClick={(e) => { e.stopPropagation(); setTooltip(tooltip === b.label ? null : b.label); }}
         >
           {b.icon}
           {b.label}
-        </span>
+        </button>
       ))}
+      {tooltip && (
+        <div className="absolute top-full left-0 mt-1 z-30 whitespace-nowrap rounded-md bg-salem-bg-dark border border-salem-accent-gold/20 px-2.5 py-1.5 text-[11px] text-salem-text-primary shadow-lg">
+          {active.find((b) => b.label === tooltip)?.desc}
+        </div>
+      )}
     </div>
   );
 }

@@ -64,7 +64,7 @@ export const PIETY_THRESHOLD = 14;
 export const GEORGE_BURROUGHS_THRESHOLD = 9;
 
 export const TIMER_DEFAULTS = {
-  dawn: 10,
+  dawn: 30,
   dayTurn: 60,
   nightWitch: 30,
   nightConstable: 15,

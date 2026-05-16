@@ -7,6 +7,7 @@ interface GameCardProps {
   disabled: boolean;
   onSelect: () => void;
   testId?: string;
+  compact?: boolean;
 }
 
 const COLOR_BORDERS: Record<CardColor, string> = {
@@ -30,9 +31,35 @@ const COLOR_VALUE_BG: Record<CardColor, string> = {
   black: "bg-salem-accent-black/30 text-salem-text-secondary",
 };
 
-export default function GameCard({ cardType, selected, disabled, onSelect, testId }: GameCardProps) {
+export default function GameCard({ cardType, selected, disabled, onSelect, testId, compact }: GameCardProps) {
   const def = CARD_DEFINITIONS[cardType];
   if (!def) return null;
+
+  if (compact) {
+    return (
+      <button
+        data-testid={testId}
+        className={`shrink-0 w-[72px] h-[48px] rounded-md border border-salem-accent-gold/15 border-l-[3px] ${COLOR_BORDERS[def.color]}
+          bg-gradient-to-b from-salem-bg-card-dark to-salem-bg-card-folded
+          flex flex-col items-center justify-center px-1 text-center overflow-hidden
+          transition-all duration-200
+          ${selected ? "translate-y-[-4px] shadow-glow border-salem-accent-gold/40" : ""}
+          ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer active:scale-95"}`}
+        onClick={disabled ? undefined : onSelect}
+        disabled={disabled}
+        aria-label={def.nameCn}
+      >
+        <span className="text-[11px] font-heading font-bold text-salem-text-bright leading-tight truncate w-full">
+          {def.nameCn}
+        </span>
+        {def.accusationValue !== undefined && def.accusationValue > 0 && (
+          <span className={`text-[9px] font-heading font-bold rounded-full px-1 ${COLOR_VALUE_BG[def.color]}`}>
+            +{def.accusationValue}
+          </span>
+        )}
+      </button>
+    );
+  }
 
   return (
     <button
