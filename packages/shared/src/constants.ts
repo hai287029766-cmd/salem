@@ -14,9 +14,9 @@ export const CARD_DEFINITIONS: Record<CardType, CardDefinition> = {
   piety: { type: "piety", color: "blue", nameCn: "虔诚", nameEn: "Piety", description: "需要14点指控才能触发审判" },
   asylum: { type: "asylum", color: "blue", nameCn: "庇护", nameEn: "Asylum", description: "免受夜间击杀" },
   matchmaker: { type: "matchmaker", color: "blue", nameCn: "红线", nameEn: "Matchmaker", description: "绑定两名玩家命运，一死俱死" },
-  black_cat: { type: "black_cat", color: "blue", nameCn: "黑猫", nameEn: "Black Cat", description: "持有者抽到阴谋卡时可选择翻哪张审判卡" },
+  black_cat: { type: "black_cat", color: "blue", nameCn: "黑猫", nameEn: "Black Cat", description: "每次阴谋结算后，持有者的一张审判卡会被翻开" },
   night: { type: "night", color: "black", nameCn: "黑夜", nameEn: "Night", description: "触发夜间阶段" },
-  conspiracy: { type: "conspiracy", color: "black", nameCn: "阴谋", nameEn: "Conspiracy", description: "所有人将一张审判卡传给左边的玩家" },
+  conspiracy: { type: "conspiracy", color: "black", nameCn: "阴谋", nameEn: "Conspiracy", description: "每名存活玩家从左边的玩家拿取一张未公开的审判卡" },
 };
 
 export const DECK_COMPOSITION: Record<CardType, number> = {
@@ -75,7 +75,7 @@ export const TIMER_DEFAULTS = {
 };
 
 export const MIN_PLAYERS = 4;
-export const MAX_PLAYERS = 12;
+export const MAX_PLAYERS = 8;
 export const ROOM_CODE_LENGTH = 6;
 export const RECONNECT_TIMEOUT = 60;
 export const HAND_SIZE_INITIAL = 3;

@@ -1,5 +1,6 @@
 import { Room, Client } from "colyseus";
 import { StateView } from "@colyseus/schema";
+import { randomUUID } from "crypto";
 import { SalemState } from "../schema/SalemState";
 import { Player } from "../schema/Player";
 import { GameEngine } from "../game/GameEngine";
@@ -14,6 +15,7 @@ import {
 interface JoinOptions {
   name: string;
   roomCode?: string;
+  reconnectToken?: string;
 }
 
 export interface RoomLookup {
@@ -54,6 +56,7 @@ export class SalemRoom extends Room<SalemState> {
   private engine: GameEngine | null = null;
   private reconnectTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private playerSessionMap: Map<string, string> = new Map(); // sessionId -> playerId
+  private reconnectTokens: Map<string, string> = new Map(); // playerId -> token
 
   onCreate(): void {
     const state = new SalemState();
@@ -75,10 +78,16 @@ export class SalemRoom extends Room<SalemState> {
     const playerId = client.sessionId;
     const playerName = sanitizeName(options?.name, this.state.players.size);
 
-    // Check if this is a reconnection
+    // Check if this is a reconnection (token-first, name-fallback only for pre-token clients)
     for (const [existingSessionId, existingPlayerId] of this.playerSessionMap) {
       const existingPlayer = this.state.players.get(existingPlayerId);
-      if (existingPlayer && existingPlayer.name === playerName && !existingPlayer.isConnected) {
+      if (!existingPlayer || existingPlayer.isConnected) continue;
+
+      const storedToken = this.reconnectTokens.get(existingPlayerId);
+      const tokenMatch = options?.reconnectToken && storedToken && options.reconnectToken === storedToken;
+      const nameMatch = !storedToken && existingPlayer.name === playerName;
+
+      if (tokenMatch || nameMatch) {
         // Reconnection
         existingPlayer.isConnected = true;
         existingPlayer.sessionId = client.sessionId;
@@ -94,6 +103,19 @@ export class SalemRoom extends Room<SalemState> {
 
         // Set up StateView for reconnected client
         this.setupClientView(client, existingPlayer);
+
+        // Generate new token and send to client
+        const newToken = randomUUID();
+        this.reconnectTokens.set(existingPlayerId, newToken);
+        client.send("reconnect_token", { token: newToken });
+
+        // Resend role info and witch vote state if applicable
+        if (this.engine) {
+          this.engine.sendRoleInfo(existingPlayerId);
+          if (this.state.gamePhase === "night_witch") {
+            this.engine.resendWitchVoteState(existingPlayerId);
+          }
+        }
 
         return;
       }
@@ -118,6 +140,11 @@ export class SalemRoom extends Room<SalemState> {
 
     this.state.players.set(playerId, player);
     this.playerSessionMap.set(client.sessionId, playerId);
+
+    // Generate and send reconnect token
+    const token = randomUUID();
+    this.reconnectTokens.set(playerId, token);
+    client.send("reconnect_token", { token });
 
     // Set up StateView so the player can see their private data
     this.setupClientView(client, player);
@@ -158,10 +185,8 @@ export class SalemRoom extends Room<SalemState> {
     if (!consented) {
       // Allow reconnection within timeout
       const timer = setTimeout(() => {
-        // Timeout expired: treat as permanent leave
         this.reconnectTimers.delete(playerId);
-        // Player remains in game but marked as disconnected
-        // The game continues without them (auto-actions on timeout)
+        this.reconnectTokens.delete(playerId);
       }, RECONNECT_TIMEOUT * 1000);
 
       this.reconnectTimers.set(playerId, timer);

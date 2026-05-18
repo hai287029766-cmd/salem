@@ -32,6 +32,7 @@ export class Player extends Schema {
   // Server-only fields (not synchronized to any client)
   // These use non-decorated properties
   hasBeenWitch: boolean = false;
+  hasBeenConstable: boolean = false;
   isConstable: boolean = false;
   isWitch: boolean = false;
   stocksCount: number = 0;

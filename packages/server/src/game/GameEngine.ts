@@ -2,6 +2,7 @@ import {
   GamePhase,
   CardType,
   CARD_DEFINITIONS,
+  CHARACTER_DEFINITIONS,
   TIMER_DEFAULTS,
   DRAW_COUNT,
   CharacterName,
@@ -41,6 +42,7 @@ export class GameEngine {
   // Night phase state
   private witchKillTargetId: string = "";
   private constableProtectTargetId: string = "";
+  private lastConstableProtectTargetId: string = "";
   private confessedPlayerIds: Set<string> = new Set();
   private declinedConfessPlayerIds: Set<string> = new Set();
   private witchVotes: Map<string, string> = new Map();
@@ -81,6 +83,7 @@ export class GameEngine {
   startGame(): void {
     const players = this.getAlivePlayers();
     if (players.length < 4) return;
+    if (players.length > CHARACTER_DEFINITIONS.length) return;
 
     this.state.round = 1;
     this.addLog("游戏已开始");
@@ -331,24 +334,12 @@ export class GameEngine {
     }
 
     this.startTimer(TIMER_DEFAULTS.nightWitch, () => {
-      // Auto-confirm all unconfirmed witches; assign random target to those without a vote
-      const aliveWitches = this.getAlivePlayers().filter((p) => p.hasBeenWitch);
-      const nonWitchAlive = this.getAlivePlayers().filter((p) => !p.hasBeenWitch);
-      for (const w of aliveWitches) {
-        if (!this.witchVotes.has(w.id) && nonWitchAlive.length > 0) {
-          this.witchVotes.set(
-            w.id,
-            nonWitchAlive[Math.floor(Math.random() * nonWitchAlive.length)].id,
-          );
-        }
-        this.witchConfirmed.add(w.id);
-      }
+      // Timeout: resolve with whatever votes exist (no consensus = no kill)
       this.resolveWitchVotes();
     });
   }
 
   private handleNightConstablePhase(): void {
-    // Find alive constable
     const constable = this.getAlivePlayers().find((p) => p.isConstable);
 
     if (!constable) {
@@ -357,16 +348,25 @@ export class GameEngine {
       return;
     }
 
+    const lastProtectedName = this.lastConstableProtectTargetId
+      ? this.state.players.get(this.lastConstableProtectTargetId)?.name ?? ""
+      : "";
+    this.lastConstableProtectTargetId = this.constableProtectTargetId;
+    this.constableProtectTargetId = "";
+
+    this.sendToPlayer(constable.id, "constable_phase_info", { lastProtectedName });
     this.addLog("警长选择保护对象");
 
     this.startTimer(TIMER_DEFAULTS.nightConstable, () => {
-      // If constable did not choose, pick random (not self)
       if (!this.constableProtectTargetId && constable) {
         const others = this.getAlivePlayers().filter((p) => p.id !== constable.id);
         if (others.length > 0) {
           this.constableProtectTargetId = others[
             Math.floor(Math.random() * others.length)
           ].id;
+          const targetName = this.state.players.get(this.constableProtectTargetId)?.name ?? "未知";
+          this.addLog(`警长超时，随机保护了 ${targetName}`);
+          this.sendToPlayer(constable.id, "constable_auto_protect", { targetName });
         }
       }
       this.transitionTo("night_confess");
@@ -391,14 +391,18 @@ export class GameEngine {
 
     if (!target || !target.isAlive) {
       this.addLog("夜间目标已死亡或无效");
+      this.broadcast("night_resolve_result", {
+        killed: null, protected: null, confessed: null, asylum: null,
+        noTarget: true, matchmakerKilled: null,
+      });
       this.finishNightResolve();
       return;
     }
 
-    // Check protection
     const isProtected = this.constableProtectTargetId === targetId;
     const hasConfessed = this.confessedPlayerIds.has(targetId);
     const hasAsylum = target.hasAsylum;
+    let matchmakerKilled: { id: string; name: string } | null = null;
 
     if (isProtected) {
       this.addLog(`${target.name} 受到警长的保护`);
@@ -408,10 +412,9 @@ export class GameEngine {
     } else if (hasAsylum) {
       this.addLog(`${target.name} 受到庇护的保护`);
     } else {
-      // Player dies
       this.killPlayer(targetId, "夜间被女巫杀害");
+      this.broadcast("sound_effect", { sound: "witch_kill" });
 
-      // Check Matchmaker chain
       if (target.hasMatchmaker) {
         const partnerId = target.matchmakerPartnerId;
         const partner = partnerId ? this.state.players.get(partnerId) : undefined;
@@ -419,12 +422,23 @@ export class GameEngine {
           const partnerCharName = partner.characterName as CharacterName;
           if (!isImmuneToMatchmaker(partnerCharName)) {
             this.killPlayer(partnerId, "红线效果");
+            matchmakerKilled = { id: partnerId, name: partner.name };
           } else {
             this.addLog(`${partner.name} 免疫红线效果（玛丽-沃伦）`);
           }
         }
       }
     }
+
+    const wasKilled = !isProtected && !hasConfessed && !hasAsylum;
+    this.broadcast("night_resolve_result", {
+      killed: wasKilled ? { id: targetId, name: target.name, reason: "夜间被女巫杀害" } : null,
+      protected: isProtected ? target.name : null,
+      confessed: hasConfessed ? target.name : null,
+      asylum: hasAsylum ? target.name : null,
+      noTarget: false,
+      matchmakerKilled,
+    });
 
     this.state.isNightKillResolved = true;
 
@@ -525,6 +539,7 @@ export class GameEngine {
     // Process each card only after the full action is known to be legal.
     for (const card of cards) {
       this.processCard(playerId, card, targetId, secondaryTargetId);
+      if (this.state.gamePhase !== "day_turn") break;
     }
 
     this.hasPlayedCard = true;
@@ -625,7 +640,7 @@ export class GameEngine {
     if (this.state.isPaused) return false;
 
     const player = this.state.players.get(playerId);
-    if (!player || !player.hasBeenWitch) return false;
+    if (!player || !player.hasBeenWitch || !player.isAlive) return false;
     if (this.dawnBlackCatPlacedBy.has(playerId)) return false;
 
     // Black Cat can be placed on self during dawn (exception to Salem First Law)
@@ -709,22 +724,22 @@ export class GameEngine {
   }
 
   private resolveWitchVotes(): void {
-    const voteCounts = new Map<string, number>();
+    const aliveWitches = this.getAlivePlayers().filter((p) => p.hasBeenWitch);
+    const targets = new Set<string>();
     for (const [, target] of this.witchVotes) {
-      voteCounts.set(target, (voteCounts.get(target) ?? 0) + 1);
+      targets.add(target);
     }
 
-    let maxVotes = 0;
-    let chosenTarget = "";
-    for (const [target, count] of voteCounts) {
-      if (count > maxVotes) {
-        maxVotes = count;
-        chosenTarget = target;
-      }
-    }
+    const allVoted = aliveWitches.every((w) => this.witchVotes.has(w.id));
+    const unanimous = allVoted && targets.size === 1;
 
-    this.witchKillTargetId = chosenTarget;
-    this.addLog("女巫已选择击杀目标");
+    if (unanimous) {
+      this.witchKillTargetId = targets.values().next().value as string;
+      this.addLog("女巫已选择击杀目标");
+    } else {
+      this.witchKillTargetId = "";
+      this.addLog("女巫未能达成一致 -- 今晚无人被杀");
+    }
 
     this.clearTimer();
     this.transitionTo("night_constable");
@@ -754,6 +769,33 @@ export class GameEngine {
         witchPlayerIds,
       });
     }
+  }
+
+  resendWitchVoteState(playerId: string): void {
+    const player = this.state.players.get(playerId);
+    if (!player || !player.hasBeenWitch) return;
+
+    const aliveWitches = this.getAlivePlayers().filter((p) => p.hasBeenWitch);
+    const witchPlayerIds = aliveWitches.map((w) => w.id);
+
+    const votes: Record<string, string> = {};
+    for (const [witchId, targetId] of this.witchVotes) {
+      votes[witchId] = targetId;
+    }
+
+    const confirmed = Array.from(this.witchConfirmed);
+
+    const voteCounts: Record<string, number> = {};
+    for (const targetId of this.witchVotes.values()) {
+      voteCounts[targetId] = (voteCounts[targetId] ?? 0) + 1;
+    }
+
+    this.sendToPlayer(playerId, "witch_vote_update", {
+      votes,
+      confirmed,
+      voteCounts,
+      witchPlayerIds,
+    });
   }
 
   handleConstableProtect(playerId: string, targetId: string): boolean {
@@ -1171,9 +1213,6 @@ export class GameEngine {
       case "alibi": {
         // Will Griggs: can use Alibi as 7-point Witness against Piety holders
         if (canUseAlibiAsWitness(player.characterName as CharacterName, target.hasPiety)) {
-          const front = this.frontCards.get(targetId) ?? [];
-          front.push("witness");
-          this.frontCards.set(targetId, front);
           target.accusationPoints += 7;
 
           this.addLog(
@@ -1261,9 +1300,19 @@ export class GameEngine {
         // Transfer statuses
         this.transferFrontCardStatuses(targetId, secondaryTargetId, sourceFront);
 
+        // All front cards removed from source -- zero out any residual accusation points
+        target.accusationPoints = 0;
+
         this.addLog(
           `${player.name} 使用替罪羊：将${target.name}面前的所有卡牌转移给${secondaryTarget.name}`
         );
+
+        const receiverCharName = secondaryTarget.characterName as CharacterName;
+        const receiverThreshold = getAccusationThreshold(receiverCharName, secondaryTarget.hasPiety);
+        if (secondaryTarget.accusationPoints >= receiverThreshold) {
+          this.addLog(`${secondaryTarget.name}因替罪羊效果已达到${receiverThreshold}点指控 -- 审判！`);
+          this.triggerTryal(secondaryTargetId);
+        }
 
         this.deck.discard([card]);
         break;
@@ -1424,6 +1473,10 @@ export class GameEngine {
             targetId,
             firstFaceDown
           );
+        } else {
+          this.state.tryalTargetId = "";
+          this.state.tryalChooserId = "";
+          this.transitionTo("day_turn", false);
         }
       }
     });
@@ -1487,6 +1540,45 @@ export class GameEngine {
 
     for (const playerId of aliveInOrder) {
       this.refreshPlayerRoles(playerId);
+    }
+
+    // FIX-3: Black Cat debuff -- reveal one tryal card on holder after conspiracy
+    if (this.state.blackCatOwnerId) {
+      const catHolder = this.state.players.get(this.state.blackCatOwnerId);
+      if (catHolder && catHolder.isAlive) {
+        const catCards = this.tryalCardMap.get(this.state.blackCatOwnerId) ?? [];
+        const firstFaceDown = catCards.findIndex((c) => !c.faceUp);
+        if (firstFaceDown !== -1) {
+          catCards[firstFaceDown].faceUp = true;
+          this.syncTryalCards(this.state.blackCatOwnerId);
+          const typeCn = catCards[firstFaceDown].type === "witch" ? "女巫"
+            : catCards[firstFaceDown].type === "constable" ? "警长" : "村民";
+          this.addLog(`黑猫效果 -- ${catHolder.name}的一张审判卡被翻开：${typeCn}`);
+          this.broadcast("card_revealed", {
+            playerId: this.state.blackCatOwnerId,
+            cardType: catCards[firstFaceDown].type,
+            cardIndex: firstFaceDown,
+          });
+          this.broadcast("sound_effect", { sound: "card_flip" });
+
+          if (catCards[firstFaceDown].type === "constable" && catHolder.isConstable) {
+            catHolder.isConstable = false;
+            this.addLog(`${catHolder.name} 是警长 -- 该角色现已空缺`);
+            this.sendRoleInfo(this.state.blackCatOwnerId);
+          }
+        }
+      }
+    }
+
+    // FIX-7: Check death after conspiracy (tryal cards may all be face up now)
+    for (const playerId of aliveInOrder) {
+      const cards = this.tryalCardMap.get(playerId) ?? [];
+      if (shouldPlayerDie(cards)) {
+        const p = this.state.players.get(playerId);
+        if (p && p.isAlive) {
+          this.killPlayer(playerId, "所有审判卡已翻开");
+        }
+      }
     }
 
     this.addLog("阴谋已结算 -- 审判卡已交换");
@@ -1731,12 +1823,15 @@ export class GameEngine {
       player.hasBeenWitch = true;
     }
     player.isConstable = cards.some((card) => card.type === "constable" && !card.faceUp);
+    if (player.isConstable) {
+      player.hasBeenConstable = true;
+    }
     player.tryalCardCount = cards.length;
     this.syncTryalCards(playerId);
     this.sendRoleInfo(playerId);
   }
 
-  private sendRoleInfo(playerId: string): void {
+  sendRoleInfo(playerId: string): void {
     const player = this.state.players.get(playerId);
     if (!player) return;
 
@@ -1806,7 +1901,7 @@ export class GameEngine {
       playerId: player.id,
       name: player.name,
       isWitch: player.hasBeenWitch,
-      isConstable: player.isConstable,
+      isConstable: player.hasBeenConstable,
       character: player.characterName,
     }));
   }

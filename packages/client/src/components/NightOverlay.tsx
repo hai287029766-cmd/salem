@@ -1,8 +1,8 @@
 import { useState, useCallback } from "react";
-import { Check, Moon, Skull, Users } from "lucide-react";
+import { Check, Moon, ScrollText, Shield, Skull, Users } from "lucide-react";
 import type { GamePhase } from "@salem/shared";
 import type { TryalCardType } from "@salem/shared";
-import type { PlayerState, RoleInfo, WitchVoteState } from "../hooks/useGameState";
+import type { PlayerState, RoleInfo, WitchVoteState, NightResolveResult } from "../hooks/useGameState";
 import { parseTryalCard } from "../utils/tryalCardParser";
 import Timer from "./Timer";
 
@@ -21,6 +21,9 @@ interface NightOverlayProps {
   onDeclineConfess: () => void;
   onShowConfess: () => void;
   showConfess: boolean;
+  nightResolveResult: NightResolveResult | null;
+  round: number;
+  constableLastProtected?: string;
 }
 
 const TRYAL_LABELS: Record<TryalCardType, string> = {
@@ -50,6 +53,9 @@ export default function NightOverlay({
   onDeclineConfess,
   onShowConfess,
   showConfess,
+  nightResolveResult,
+  round,
+  constableLastProtected,
 }: NightOverlayProps) {
   const isWitch = roleInfo?.isWitch ?? false;
   const isConstable = roleInfo?.isConstable ?? false;
@@ -77,6 +83,7 @@ export default function NightOverlay({
         myId={myId}
         timer={timer}
         onProtect={onConstableProtect}
+        lastProtectedName={constableLastProtected}
       />
     );
   }
@@ -85,6 +92,7 @@ export default function NightOverlay({
   if (phase === "night_confess") {
     return (
       <ConfessView
+        key={round}
         timer={timer}
         showConfess={showConfess}
         onShowConfess={onShowConfess}
@@ -92,6 +100,13 @@ export default function NightOverlay({
         onDeclineConfess={onDeclineConfess}
         myPlayer={players.find((p) => p.id === myId)}
       />
+    );
+  }
+
+  // Night resolve with outcome display
+  if (phase === "night_resolve" && nightResolveResult) {
+    return (
+      <NightResolveView result={nightResolveResult} timer={timer} />
     );
   }
 
@@ -227,6 +242,11 @@ function WitchView({
                   {voteCount}
                 </span>
               )}
+              {isConfirmed && isMyChoice && (
+                <div className="absolute inset-0 flex items-center justify-center rounded-card bg-salem-accent-red/10">
+                  <Check size={24} className="text-salem-accent-red drop-shadow-md" />
+                </div>
+              )}
             </button>
           );
         })}
@@ -276,11 +296,13 @@ function ConstableView({
   myId,
   timer,
   onProtect,
+  lastProtectedName,
 }: {
   players: PlayerState[];
   myId: string;
   timer: number;
   onProtect: (targetId: string) => void;
+  lastProtectedName?: string;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const targets = players.filter((p) => p.isAlive && p.id !== myId);
@@ -301,7 +323,10 @@ function ConstableView({
       </div>
 
       <p className="text-sm text-salem-text-primary mb-1">选择保护对象:</p>
-      <p className="text-xs text-salem-text-secondary mb-4">(不能保护自己)</p>
+      <p className="text-xs text-salem-text-secondary mb-2">(不能保护自己)</p>
+      {lastProtectedName && (
+        <p className="text-xs text-[#80b8e0] mb-3">上轮保护: {lastProtectedName}</p>
+      )}
 
       <div className="grid grid-cols-2 gap-3 flex-1 overflow-y-auto">
         {targets.map((p) => (
@@ -367,7 +392,7 @@ function ConfessView({
         background: "linear-gradient(180deg, #0a0e1a 0%, #1a1a2e 40%, #0d1117 100%)",
       }}
     >
-      <Moon size={40} className="text-gray-400/60 mb-6" />
+      <ScrollText size={40} className="text-salem-accent-gold/60 mb-6" />
       <p className="font-heading text-lg text-salem-text-primary/80 mb-2">
         认罪窗口
       </p>
@@ -423,6 +448,60 @@ function ConfessView({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function NightResolveView({
+  result,
+  timer,
+}: {
+  result: NightResolveResult;
+  timer: number;
+}) {
+  const getOutcome = () => {
+    if (result.noTarget) {
+      return { icon: <Moon size={44} className="text-gray-300" />, lines: ["今晚风平浪静", "无人成为目标"], color: "text-salem-text-primary/80" };
+    }
+    if (result.killed) {
+      const lines = [`${result.killed.name} 被女巫杀害`];
+      if (result.matchmakerKilled) {
+        lines.push(`${result.matchmakerKilled.name} 因红线效果一同死亡`);
+      }
+      return { icon: <Skull size={44} className="text-salem-accent-red" />, lines, color: "text-salem-accent-red" };
+    }
+    if (result.protected) {
+      return { icon: <Shield size={44} className="text-[#80b8e0]" />, lines: [`${result.protected} 受到了保护`, "警长的庇佑拯救了一条性命"], color: "text-[#80b8e0]" };
+    }
+    if (result.confessed) {
+      return { icon: <ScrollText size={44} className="text-salem-accent-gold" />, lines: [`${result.confessed} 选择了认罪`, "以身份卡换取今夜平安"], color: "text-salem-accent-gold" };
+    }
+    if (result.asylum) {
+      return { icon: <Shield size={44} className="text-[#80b8e0]" />, lines: [`${result.asylum} 受到庇护的保护`, "庇护卡的力量化解了危机"], color: "text-[#80b8e0]" };
+    }
+    return { icon: <Moon size={44} className="text-gray-300" />, lines: ["命运正在揭晓..."], color: "text-salem-text-primary/80" };
+  };
+
+  const outcome = getOutcome();
+
+  return (
+    <div
+      className="absolute inset-0 z-40 flex flex-col items-center justify-center px-6"
+      style={{
+        background: result.killed
+          ? "linear-gradient(180deg, #1a0a0a 0%, #2e1a1a 40%, #170d0d 100%)"
+          : "linear-gradient(180deg, #0a0e1a 0%, #1a1a2e 40%, #0d1117 100%)",
+      }}
+    >
+      <div className="mb-6">{outcome.icon}</div>
+      {outcome.lines.map((line, i) => (
+        <p key={i} className={`font-heading ${i === 0 ? "text-xl" : "text-sm"} ${i === 0 ? outcome.color : "text-salem-text-secondary"} ${i > 0 ? "mt-1" : "mb-2"} text-center`}>
+          {line}
+        </p>
+      ))}
+      <div className="mt-4">
+        <Timer seconds={timer} isPaused={false} />
+      </div>
     </div>
   );
 }

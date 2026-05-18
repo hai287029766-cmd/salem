@@ -143,7 +143,8 @@ export function useColyseus(): UseColyseusReturn {
 
       const client = getClient();
       const roomId = await resolveRoomId(normalizedRoomCode);
-      const joinedRoom = await client.joinById(roomId, { name, roomCode: normalizedRoomCode });
+      const reconnectToken = sessionStorage.getItem(`salem_reconnect_${normalizedRoomCode}`) || undefined;
+      const joinedRoom = await client.joinById(roomId, { name, roomCode: normalizedRoomCode, reconnectToken });
       sessionStorage.setItem("salem_nickname", name);
       sessionStorage.setItem("salem_room_code", normalizedRoomCode);
       setActiveRoom(joinedRoom, normalizedRoomCode);

@@ -1,3 +1,4 @@
+import { Info } from "lucide-react";
 import { CARD_DEFINITIONS } from "@salem/shared";
 import type { CardType, CardColor } from "@salem/shared";
 
@@ -6,6 +7,8 @@ interface GameCardProps {
   selected: boolean;
   disabled: boolean;
   onSelect: () => void;
+  onInfo?: () => void;
+  highlightInfo?: boolean;
   testId?: string;
   compact?: boolean;
 }
@@ -31,7 +34,7 @@ const COLOR_VALUE_BG: Record<CardColor, string> = {
   black: "bg-salem-accent-black/30 text-salem-text-secondary",
 };
 
-export default function GameCard({ cardType, selected, disabled, onSelect, testId, compact }: GameCardProps) {
+export default function GameCard({ cardType, selected, disabled, onSelect, onInfo, highlightInfo, testId, compact }: GameCardProps) {
   const def = CARD_DEFINITIONS[cardType];
   if (!def) return null;
 
@@ -39,7 +42,7 @@ export default function GameCard({ cardType, selected, disabled, onSelect, testI
     return (
       <button
         data-testid={testId}
-        className={`shrink-0 w-[88px] h-[56px] rounded-md border border-salem-accent-gold/15 border-l-[3px] ${COLOR_BORDERS[def.color]}
+        className={`relative shrink-0 w-[88px] h-[56px] rounded-md border border-salem-accent-gold/15 border-l-[3px] ${COLOR_BORDERS[def.color]}
           bg-gradient-to-b from-salem-bg-card-dark to-salem-bg-card-folded
           flex flex-col items-center justify-center px-1 text-center overflow-hidden
           transition-all duration-200
@@ -55,6 +58,18 @@ export default function GameCard({ cardType, selected, disabled, onSelect, testI
         {def.accusationValue !== undefined && def.accusationValue > 0 && (
           <span className={`text-[9px] font-heading font-bold rounded-full px-1 mt-0.5 ${COLOR_VALUE_BG[def.color]}`}>
             +{def.accusationValue}
+          </span>
+        )}
+        {onInfo && (
+          <span
+            className="absolute -top-1 -right-1 w-7 h-7 flex items-center justify-center rounded-full text-salem-text-ink hover:text-salem-accent-gold transition-colors"
+            onClick={(e) => { e.stopPropagation(); onInfo(); }}
+            role="button"
+            aria-label="查看详情"
+          >
+            <span className={`w-4 h-4 flex items-center justify-center rounded-full bg-salem-bg-dark/80 ${highlightInfo ? "animate-pulse ring-1 ring-salem-accent-gold/60" : ""}`}>
+              <Info size={10} />
+            </span>
           </span>
         )}
       </button>

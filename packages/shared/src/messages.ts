@@ -34,6 +34,7 @@ export type ServerEvent =
   | { type: "player_killed"; playerId: string; playerName: string; reason: string }
   | { type: "game_over"; winner: "townspeople" | "witches" }
   | { type: "sound_effect"; sound: SoundType }
+  | { type: "night_resolve_result"; killed: { id: string; name: string; reason: string } | null; protected: string | null; confessed: string | null; asylum: string | null; noTarget: boolean; matchmakerKilled: { id: string; name: string } | null }
   | { type: "your_role"; isWitch: boolean; isConstable: boolean; witchPartners?: string[] }
   | { type: "character_skill_result"; skill: string; deck?: CardType[]; availableCards?: CardType[]; targetId?: string; message?: string }
   | { type: "witch_vote_update"; votes: Record<string, string>; confirmed: string[]; voteCounts: Record<string, number>; witchPlayerIds: string[] }
@@ -51,4 +52,5 @@ export type SoundType =
   | "gavel"
   | "death"
   | "tick"
-  | "victory";
+  | "victory"
+  | "witch_kill";

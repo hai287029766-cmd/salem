@@ -31,7 +31,7 @@ const PHASE_CONFIGS: Partial<Record<GamePhase, PhaseConfig>> = {
   },
   conspiracy: {
     title: "阴谋开始",
-    subtitle: "从旁边的玩家选择一张未公开的身份牌",
+    subtitle: "从左边的玩家拿取一张未公开的审判卡",
     icon: <Users size={48} className="text-[#c090e0]" />,
     bgGradient: "linear-gradient(180deg, rgba(21,8,26,0.85) 0%, rgba(42,21,53,0.85) 50%, rgba(13,8,23,0.85) 100%)",
   },

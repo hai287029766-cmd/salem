@@ -142,6 +142,11 @@ export default function TryalOverlay({ state, myId, onChoose, lastEvent }: Tryal
                 {TRYAL_LABELS[revealState.cardType]}
               </span>
             </p>
+            {revealState.cardType === "constable" && (
+              <p className="mt-2 text-xs text-[#80b8e0]">
+                警长身份暴露 -- 将失去保护能力
+              </p>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

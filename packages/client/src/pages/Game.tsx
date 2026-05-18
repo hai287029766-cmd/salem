@@ -7,7 +7,6 @@ import { useVoiceConnection } from "../hooks/useVoiceConnection";
 import { useSound } from "../hooks/useSound";
 import type { Room } from "colyseus.js";
 import type { CardType } from "@salem/shared";
-import { CHARACTER_DEFINITIONS } from "@salem/shared";
 import PlayerSeat from "../components/PlayerSeat";
 import CardHandStrip from "../components/CardHandStrip";
 import ActionPanel from "../components/ActionPanel";
@@ -22,6 +21,8 @@ import TryalOverlay from "../components/TryalOverlay";
 import ConspiracyOverlay from "../components/ConspiracyOverlay";
 import DawnBlackCatOverlay from "../components/DawnBlackCatOverlay";
 import PhaseTransition from "../components/PhaseTransition";
+import TitubaSkillOverlay from "../components/TitubaSkillOverlay";
+import Toast from "../components/Toast";
 
 type ActionMode = "idle" | "play_card" | "select_target";
 type TabId = "game" | "log";
@@ -45,7 +46,7 @@ export default function Game() {
   const navigate = useNavigate();
   const { room: activeRoom, joinRoom, sendMessage } = useColyseus();
   const [room, setRoom] = useState<Room | null>(activeRoom);
-  const { state, myId, roleInfo, logs, gameResult, witchVoteState, lastEvent } = useGameState(room);
+  const { state, myId, roleInfo, logs, gameResult, witchVoteState, lastEvent, nightResolveResult, titubaSkillData, clearTitubaSkillData, constableLastProtected } = useGameState(room);
   const { play } = useSound();
 
   const [actionMode, setActionMode] = useState<ActionMode>("idle");
@@ -58,6 +59,8 @@ export default function Game() {
   const [playedThisTurn, setPlayedThisTurn] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("game");
   const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null);
+  const [primaryTargetId, setPrimaryTargetId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeRoom && activeRoom !== room) setRoom(activeRoom);
@@ -104,6 +107,10 @@ export default function Game() {
     if (lastEvent?.type === "sound_effect" && lastEvent.sound) {
       play(lastEvent.sound);
     }
+    if ((lastEvent as unknown as { type: string })?.type === "constable_auto_protect") {
+      const targetName = (lastEvent as unknown as { targetName: string }).targetName;
+      setToastMessage(`超时，已随机保护 ${targetName}`);
+    }
   }, [lastEvent, play]);
 
   // Auto-expand current turn player
@@ -119,6 +126,7 @@ export default function Game() {
     setActionMode("idle");
     setSelectedCards([]);
     setSelectedCardIndexes([]);
+    setPrimaryTargetId(null);
   }, [state?.currentPlayerId, phase]);
 
   const handleTogglePlayer = useCallback((playerId: string) => {
@@ -126,32 +134,50 @@ export default function Game() {
   }, []);
 
   const handleSelectCard = useCallback((card: CardType, index: number) => {
-    setSelectedCardIndexes((prev) => {
-      if (prev.includes(index)) return prev.filter((i) => i !== index);
-      return [...prev, index];
-    });
-    setSelectedCards((prev) => {
-      if (selectedCardIndexes.includes(index)) {
-        const next = [...prev];
-        const removeAt = next.indexOf(card);
-        if (removeAt >= 0) next.splice(removeAt, 1);
-        return next;
+    setSelectedCardIndexes((prevIndexes) => {
+      const removing = prevIndexes.includes(index);
+      setSelectedCards((prevCards) => {
+        if (removing) {
+          const next = [...prevCards];
+          const at = next.indexOf(card);
+          if (at >= 0) next.splice(at, 1);
+          return next;
+        }
+        return [...prevCards, card];
+      });
+      if (removing && (card === "robbery" || card === "scapegoat")) {
+        setPrimaryTargetId(null);
       }
-      return [...prev, card];
+      return removing ? prevIndexes.filter((i) => i !== index) : [...prevIndexes, index];
     });
     setActionMode("select_target");
-  }, [selectedCardIndexes]);
+  }, []);
+
+  const needsTwoTargets = selectedCards.some(
+    (c) => c === "robbery" || c === "scapegoat"
+  );
 
   const handleTargetPlayer = useCallback((targetId: string) => {
-    if (actionMode === "select_target" && selectedCards.length > 0) {
-      sendMessage({ type: "play_cards", cards: selectedCards, targetId });
-      play("card_play");
-      setSelectedCards([]);
-      setSelectedCardIndexes([]);
-      setPlayedThisTurn(true);
-      setActionMode("play_card");
+    if (actionMode !== "select_target" || selectedCards.length === 0) return;
+
+    if (needsTwoTargets && !primaryTargetId) {
+      setPrimaryTargetId(targetId);
+      return;
     }
-  }, [actionMode, selectedCards, sendMessage, play]);
+
+    sendMessage({
+      type: "play_cards",
+      cards: selectedCards,
+      targetId: primaryTargetId || targetId,
+      secondaryTargetId: primaryTargetId ? targetId : undefined,
+    });
+    play("card_play");
+    setSelectedCards([]);
+    setSelectedCardIndexes([]);
+    setPrimaryTargetId(null);
+    setPlayedThisTurn(true);
+    setActionMode("play_card");
+  }, [actionMode, selectedCards, needsTwoTargets, primaryTargetId, sendMessage, play]);
 
   const handleDrawCards = useCallback(() => {
     sendMessage({ type: "draw_cards" });
@@ -169,6 +195,7 @@ export default function Game() {
     setActionMode("idle");
     setSelectedCards([]);
     setSelectedCardIndexes([]);
+    setPrimaryTargetId(null);
   }, []);
 
   const handleEndTurn = useCallback(() => {
@@ -295,6 +322,16 @@ export default function Game() {
         {/* GAME tab — unified players + hand */}
         {activeTab === "game" && (
           <div className="flex flex-col gap-2 px-3 py-3">
+            {needsTwoTargets && actionMode === "select_target" && !primaryTargetId && (
+              <div className="text-center text-sm text-salem-accent-gold font-heading py-1 bg-salem-accent-gold/10 rounded-card">
+                第1步: 选择来源玩家
+              </div>
+            )}
+            {primaryTargetId && (
+              <div className="text-center text-sm text-salem-accent-gold font-heading py-1 bg-salem-accent-gold/10 rounded-card">
+                第2步: 选择接收目标
+              </div>
+            )}
             {players.map((player) => (
               <PlayerSeat
                 key={player.id}
@@ -302,7 +339,7 @@ export default function Game() {
                 isCurrentTurn={player.id === state.currentPlayerId}
                 isSelf={player.id === myId}
                 isSpeaking={speakingParticipants.has(player.id)}
-                selectable={actionMode === "select_target" && player.id !== myId && player.isAlive}
+                selectable={actionMode === "select_target" && player.id !== myId && player.isAlive && player.id !== primaryTargetId}
                 onSelect={() => handleTargetPlayer(player.id)}
                 expanded={expandedPlayerId === player.id}
                 onToggle={() => handleTogglePlayer(player.id)}
@@ -327,9 +364,7 @@ export default function Game() {
           disabled={!isMyTurn || actionMode === "idle"}
           isPlayMode={actionMode !== "idle"}
           characterName={myPlayer.characterName}
-          characterLabel={
-            CHARACTER_DEFINITIONS.find((c) => c.name === myPlayer.characterName)?.nameCn
-          }
+          characterLabel={getSkillTooltip(myPlayer.characterName)}
           onUseSkill={handleUseCharacterSkill}
           skillDisabled={!isMyTurn && myPlayer.characterName !== "john_proctor"}
           skillLabel={getSkillButtonLabel(myPlayer.characterName)}
@@ -345,6 +380,7 @@ export default function Game() {
         onCancelPlayMode={handleCancelPlayMode}
         onEndTurn={handleEndTurn}
         canEndTurn={canEndTurn}
+        round={state.round}
       />
 
       {/* === Bottom tab navigation === */}
@@ -375,6 +411,9 @@ export default function Game() {
           onDeclineConfess={handleDeclineConfess}
           onShowConfess={() => setShowConfess(true)}
           showConfess={showConfess}
+          nightResolveResult={nightResolveResult}
+          round={state.round}
+          constableLastProtected={constableLastProtected}
         />
       )}
 
@@ -421,7 +460,23 @@ export default function Game() {
         />
       )}
 
+      {titubaSkillData && (
+        <TitubaSkillOverlay
+          deck={titubaSkillData.deck}
+          timer={state.timer}
+          onConfirm={(newOrder) => {
+            sendMessage({ type: "use_character_skill", deckOrder: newOrder });
+            clearTitubaSkillData();
+          }}
+          onCancel={clearTitubaSkillData}
+        />
+      )}
+
       <PhaseTransition phase={phase} />
+
+      {toastMessage && (
+        <Toast message={toastMessage} duration={4000} onDismiss={() => setToastMessage(null)} />
+      )}
     </div>
   );
 }
@@ -452,7 +507,7 @@ function BottomTabs({
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto flex justify-around py-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom,0px))] bg-gradient-to-t from-salem-bg-dark/95 via-salem-bg-dark/90 to-transparent backdrop-blur-sm border-t border-salem-accent-gold/10 z-30">
+    <nav className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto flex justify-around py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] bg-gradient-to-t from-salem-bg-dark/95 via-salem-bg-dark/90 to-transparent backdrop-blur-sm border-t border-salem-accent-gold/10 z-30">
       {tabs.map((tab) => {
         const active = activeTab === tab.id;
         const Icon = tab.icon;
@@ -493,5 +548,14 @@ function getSkillButtonLabel(characterName: string): string {
     case "tituba": return "查看牌堆";
     case "john_proctor": return "查看死者手牌";
     default: return "技能状态";
+  }
+}
+
+function getSkillTooltip(characterName: string): string {
+  switch (characterName) {
+    case "samuel_parris": return "Samuel Parris: 从弃牌堆中抽取2张牌加入手牌";
+    case "tituba": return "Tituba: 查看并重新排列牌堆顶部的牌";
+    case "john_proctor": return "John Proctor: 查看一名已死亡玩家的手牌";
+    default: return "角色技能";
   }
 }

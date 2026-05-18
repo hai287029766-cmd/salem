@@ -31,7 +31,7 @@ export default function Lobby() {
   }, [room, activeRoom, roomCode, joinRoom, navigate]);
 
   useEffect(() => {
-    if (state?.gamePhase === "dealing" || state?.gamePhase === "day_turn") {
+    if (state?.gamePhase && state.gamePhase !== "lobby") {
       navigate(`/game/${roomCode}`);
     }
   }, [state?.gamePhase, roomCode, navigate]);

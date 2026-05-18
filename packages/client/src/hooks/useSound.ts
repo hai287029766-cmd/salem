@@ -12,6 +12,7 @@ const SOUND_FILES: Record<SoundType, string> = {
   death: "/assets/sounds/death.wav",
   tick: "/assets/sounds/tick.wav",
   victory: "/assets/sounds/victory.wav",
+  witch_kill: "/assets/sounds/witch-kill.wav",
 };
 
 export interface UseSoundReturn {

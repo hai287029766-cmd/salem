@@ -65,6 +65,15 @@ export interface WitchVoteState {
   witchPlayerIds: string[];
 }
 
+export interface NightResolveResult {
+  killed: { id: string; name: string; reason: string } | null;
+  protected: string | null;
+  confessed: string | null;
+  asylum: string | null;
+  noTarget: boolean;
+  matchmakerKilled: { id: string; name: string } | null;
+}
+
 export interface UseGameStateReturn {
   state: GameState | null;
   myId: string | null;
@@ -73,6 +82,10 @@ export interface UseGameStateReturn {
   lastEvent: ServerEvent | null;
   gameResult: { winner: "townspeople" | "witches"; reveals: RevealEntry[] } | null;
   witchVoteState: WitchVoteState | null;
+  nightResolveResult: NightResolveResult | null;
+  titubaSkillData: { deck: CardType[] } | null;
+  clearTitubaSkillData: () => void;
+  constableLastProtected: string;
 }
 
 const DEFAULT_STATE: GameState = {
@@ -146,6 +159,9 @@ export function useGameState(room: Room | null): UseGameStateReturn {
   const [lastEvent, setLastEvent] = useState<ServerEvent | null>(null);
   const [gameResult, setGameResult] = useState<{ winner: "townspeople" | "witches"; reveals: RevealEntry[] } | null>(null);
   const [witchVoteState, setWitchVoteState] = useState<WitchVoteState | null>(null);
+  const [nightResolveResult, setNightResolveResult] = useState<NightResolveResult | null>(null);
+  const [titubaSkillData, setTitubaSkillData] = useState<{ deck: CardType[] } | null>(null);
+  const [constableLastProtected, setConstableLastProtected] = useState<string>("");
 
   const handleStateChange = useCallback((roomState: Record<string, unknown>) => {
     const players = new Map<string, PlayerState>();
@@ -193,6 +209,8 @@ export function useGameState(room: Room | null): UseGameStateReturn {
       setLogs([]);
       setGameResult(null);
       setWitchVoteState(null);
+      setNightResolveResult(null);
+      setTitubaSkillData(null);
       return;
     }
 
@@ -218,7 +236,14 @@ export function useGameState(room: Room | null): UseGameStateReturn {
       setLogs((prev) => [...prev, data.message]);
     });
 
-    room.onMessage("character_skill_result", (data: { message?: string; skill?: string }) => {
+    room.onMessage("character_skill_result", (data: { message?: string; skill?: string; deck?: CardType[] }) => {
+      if (data.skill === "tituba" && data.deck) {
+        setTitubaSkillData({ deck: data.deck });
+        return;
+      }
+      if (data.skill === "tituba" && !data.deck) {
+        setTitubaSkillData(null);
+      }
       const message = data.message || `${data.skill || "character"} ability resolved`;
       setLogs((prev) => [...prev, message]);
     });
@@ -234,6 +259,21 @@ export function useGameState(room: Room | null): UseGameStateReturn {
       setWitchVoteState(data);
     });
 
+    room.onMessage("night_resolve_result", (data: NightResolveResult) => {
+      setNightResolveResult(data);
+    });
+
+    room.onMessage("reconnect_token", (data: { token: string }) => {
+      const roomCode = (room.state as { roomCode?: string } | undefined)?.roomCode;
+      if (data.token && roomCode) {
+        sessionStorage.setItem(`salem_reconnect_${roomCode}`, data.token);
+      }
+    });
+
+    room.onMessage("constable_phase_info", (data: { lastProtectedName: string }) => {
+      setConstableLastProtected(data.lastProtectedName || "");
+    });
+
     room.onMessage("*", (type, message) => {
       setLastEvent({ type, ...message } as unknown as ServerEvent);
     });
@@ -247,7 +287,17 @@ export function useGameState(room: Room | null): UseGameStateReturn {
     if (state?.gamePhase !== "night_witch") {
       setWitchVoteState(null);
     }
+    if (state?.gamePhase !== "night_resolve") {
+      setNightResolveResult(null);
+    }
+    if (state?.gamePhase !== "day_turn") {
+      setTitubaSkillData(null);
+    }
   }, [state?.gamePhase]);
+
+  const clearTitubaSkillData = useCallback(() => {
+    setTitubaSkillData(null);
+  }, []);
 
   return {
     state: state || DEFAULT_STATE,
@@ -257,5 +307,9 @@ export function useGameState(room: Room | null): UseGameStateReturn {
     lastEvent,
     gameResult,
     witchVoteState,
+    nightResolveResult,
+    titubaSkillData,
+    clearTitubaSkillData,
+    constableLastProtected,
   };
 }

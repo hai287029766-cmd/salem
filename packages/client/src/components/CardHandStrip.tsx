@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { Sparkles, X } from "lucide-react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { ChevronRight, Sparkles, X } from "lucide-react";
 import { CARD_DEFINITIONS } from "@salem/shared";
 import type { CardType, CardColor } from "@salem/shared";
 import GameCard from "./GameCard";
@@ -37,18 +37,34 @@ export default function CardHandStrip({
   isPlayMode = false,
 }: CardHandStripProps) {
   const [detailCard, setDetailCard] = useState<{ card: CardType; index: number } | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showOverflowHint, setShowOverflowHint] = useState(false);
+  const [infoDiscovered, setInfoDiscovered] = useState(() => sessionStorage.getItem("salem_info_discovered") === "1");
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const check = () => {
+      setShowOverflowHint(el.scrollWidth > el.clientWidth + 4 && el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
+    };
+    check();
+    el.addEventListener("scroll", check, { passive: true });
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", check); ro.disconnect(); };
+  }, [cards.length]);
 
   const handleCardClick = useCallback((card: CardType, index: number) => {
-    if (isPlayMode) {
+    if (isPlayMode && !disabled) {
       onSelectCard(card, index);
     } else {
       setDetailCard({ card, index });
     }
-  }, [isPlayMode, onSelectCard]);
+  }, [isPlayMode, disabled, onSelectCard]);
 
   return (
     <>
-      <div className="fixed bottom-[96px] left-0 right-0 max-w-[430px] mx-auto border-t border-salem-accent-gold/10 bg-salem-bg-dark/95 backdrop-blur-sm px-3 py-1.5 z-20">
+      <div className="fixed bottom-[88px] left-0 right-0 max-w-[430px] mx-auto border-t border-salem-accent-gold/10 bg-salem-bg-dark/95 backdrop-blur-sm px-3 py-1 z-[22]">
         <div className="flex items-center gap-2">
           {characterName && onUseSkill && (
             <button
@@ -69,7 +85,7 @@ export default function CardHandStrip({
             </button>
           )}
 
-          <div className="flex-1 flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-0.5">
+          <div ref={scrollRef} className="flex-1 flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-0.5 relative">
             {cards.length === 0 ? (
               <span className="text-[11px] text-salem-text-ink italic px-1">
                 无手牌
@@ -80,14 +96,22 @@ export default function CardHandStrip({
                   key={`${card}-${index}`}
                   cardType={card}
                   selected={selectedCardIndexes.includes(index)}
-                  disabled={disabled}
+                  disabled={false}
                   onSelect={() => handleCardClick(card, index)}
+                  onInfo={() => { setInfoDiscovered(true); sessionStorage.setItem("salem_info_discovered", "1"); setDetailCard({ card, index }); }}
+                  highlightInfo={!infoDiscovered && index === 0}
                   testId={`game-hand-card-${index}`}
                   compact
                 />
               ))
             )}
           </div>
+
+          {showOverflowHint && (
+            <div className="shrink-0 flex items-center text-salem-accent-gold/60 animate-pulse">
+              <ChevronRight size={14} />
+            </div>
+          )}
 
           <span className="shrink-0 text-[10px] text-salem-text-ink font-heading tabular-nums">
             {cards.length}
