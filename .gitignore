@@ -1,7 +1,13 @@
 node_modules/
 dist/
 .env
+.env.*
+!.env.example
 *.log
 logs/
 packages/server/static/
 .DS_Store
+*.tsbuildinfo
+playwright-report/
+test-results/
+tmp/
