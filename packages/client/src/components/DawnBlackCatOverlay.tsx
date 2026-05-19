@@ -62,12 +62,12 @@ export default function DawnBlackCatOverlay({
               </button>
             ))}
           </div>
-          {pendingTarget && pendingTarget !== blackCatOwnerId && (
+          {pendingTarget && (
             <button
               className="btn-primary w-full mt-3"
               onClick={() => { onChoose(pendingTarget); setPendingTarget(null); }}
             >
-              确认放置
+              {pendingTarget === blackCatOwnerId ? "确认保持原位" : "确认放置"}
             </button>
           )}
         </div>

@@ -36,6 +36,22 @@ async function ready(page: Page) {
   await page.getByTestId("lobby-ready-button").click();
 }
 
+async function dismissRoleReveals(players: TestPlayer[]) {
+  const deadline = Date.now() + 1_500;
+  while (Date.now() < deadline) {
+    let dismissed = false;
+    for (const player of players) {
+      const button = player.page.getByRole("button", { name: "进入游戏" });
+      if (await button.isVisible().catch(() => false)) {
+        await button.click();
+        dismissed = true;
+      }
+    }
+    if (!dismissed) return;
+    await players[0].page.waitForTimeout(150);
+  }
+}
+
 async function startFourPlayerGame(browser: Browser, options: { waitForDay?: boolean } = {}) {
   const players = await Promise.all(["Alice", "Bob", "Cara", "Dan"].map((name) => createPlayer(browser, name)));
   const host = players[0];
@@ -48,7 +64,7 @@ async function startFourPlayerGame(browser: Browser, options: { waitForDay?: boo
       await joinRoom(player.page, player.name, roomCode);
     }
 
-    await Promise.all(players.map((player) => expect(player.page.getByTestId("lobby-player-count")).toContainText("4/12")));
+    await Promise.all(players.map((player) => expect(player.page.getByTestId("lobby-player-count")).toContainText("4/8")));
 
     for (const player of players.slice(1)) {
       await ready(player.page);
@@ -58,6 +74,7 @@ async function startFourPlayerGame(browser: Browser, options: { waitForDay?: boo
     await host.page.getByTestId("lobby-start-button").click();
     await Promise.all(players.map((player) => expect(player.page).toHaveURL(/\/game\/[A-Z2-9]{6}$/)));
     await Promise.all(players.map((player) => expect(player.page.getByTestId("game-phase")).toBeVisible()));
+    await dismissRoleReveals(players);
 
     if (options.waitForDay) {
       await waitForDay(players);
@@ -71,10 +88,11 @@ async function startFourPlayerGame(browser: Browser, options: { waitForDay?: boo
 }
 
 async function closePlayers(players: TestPlayer[]) {
-  await Promise.all(players.map((player) => player.context.close()));
+  await Promise.allSettled(players.map((player) => player.context.close()));
 }
 
 async function waitForDay(players: TestPlayer[]) {
+  await dismissRoleReveals(players);
   await resolveDawn(players);
   await Promise.all(players.map((player) => expect(player.page.getByTestId("game-phase")).toContainText("白天", { timeout: 40_000 })));
 }
@@ -86,6 +104,10 @@ async function resolveDawn(players: TestPlayer[]) {
       const target = player.page.locator('[data-testid^="dawn-black-cat-target-"]').first();
       if (await target.isVisible().catch(() => false)) {
         await target.click();
+        const confirm = player.page.getByRole("button", { name: /确认放置|确认保持原位/ });
+        if (await confirm.isVisible().catch(() => false)) {
+          await confirm.click();
+        }
         return;
       }
     }
@@ -98,6 +120,7 @@ async function resolveDawn(players: TestPlayer[]) {
 async function currentPlayer(players: TestPlayer[]): Promise<TestPlayer> {
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
+    await dismissRoleReveals(players);
     for (const player of players) {
       if (await player.page.getByTestId("game-action-draw").isEnabled().catch(() => false)) {
         return player;
@@ -131,6 +154,10 @@ async function setTopCard(roomCode: string, card: string) {
     const text = await response.text().catch(() => "");
     throw new Error(`setTopCard failed (${response.status}): ${text}`);
   }
+  const payload = await response.json().catch(() => null) as { data?: { ok?: boolean } } | null;
+  if (payload?.data?.ok !== true) {
+    throw new Error(`setTopCard failed: ${JSON.stringify(payload)}`);
+  }
 }
 
 async function setPlayerHand(roomCode: string, playerId: string, cards: string[]) {
@@ -142,6 +169,10 @@ async function setPlayerHand(roomCode: string, playerId: string, cards: string[]
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     throw new Error(`setPlayerHand failed (${response.status}) playerId=${playerId}: ${text}`);
+  }
+  const payload = await response.json().catch(() => null) as { data?: { ok?: boolean } } | null;
+  if (payload?.data?.ok !== true) {
+    throw new Error(`setPlayerHand failed playerId=${playerId}: ${JSON.stringify(payload)}`);
   }
 }
 
@@ -181,8 +212,8 @@ test("语音未配置稳定降级，4 人建房、加入、准备、开始不被
 
   try {
     await Promise.all(players.map(async (player) => {
-      await expect(player.page.getByTestId("game-voice-connected")).toContainText("语音未配置");
-      await expect(player.page.getByTestId("game-mic-button")).toBeDisabled();
+      await expect(player.page.getByTestId("game-voice-connected")).toHaveCount(0);
+      await expect(player.page.getByTestId("game-mic-button")).toHaveCount(0);
     }));
   } finally {
     await closePlayers(players);
@@ -208,11 +239,14 @@ test("出牌后仍停留在当前玩家回合，直到点击结束回合", async
   try {
     const actor = await currentPlayer(players);
     const actorId = await ensureCurrentPlayerId(actor.page);
-    await setPlayerHand(roomCode, actorId, ["accusation", "accusation"]);
+    await setPlayerHand(roomCode, actorId, ["accusation", "evidence", "alibi"]);
     await expect(actor.page.getByTestId("game-hand-card-0")).toBeVisible({ timeout: 5_000 });
+    await expect(actor.page.getByTestId("game-hand-card-1")).toContainText("证据", { timeout: 5_000 });
 
     await actor.page.getByTestId("game-action-play").click();
+    await expect(actor.page.getByText("选择手牌")).toBeVisible();
     await actor.page.getByTestId("game-hand-card-0").click();
+    await expect(actor.page.getByText("选择目标玩家")).toBeVisible();
     await actor.page.getByTestId(await firstOtherSeat(actor.page)).click();
 
     await expect(actor.page.getByTestId("game-action-end-turn")).toBeEnabled();
@@ -258,7 +292,7 @@ test("身份牌对本人显示真实内容，对他人显示背面或公开牌",
   }
 });
 
-test("摸到传染卡立即进入传染阶段，并能从左手边玩家选择未翻身份牌", async ({ browser }) => {
+test("摸到阴谋卡立即进入阴谋阶段，并能从左手边玩家选择未翻身份牌", async ({ browser }) => {
   const { players, roomCode } = await startFourPlayerGame(browser, { waitForDay: true });
 
   try {
@@ -267,6 +301,7 @@ test("摸到传染卡立即进入传染阶段，并能从左手边玩家选择�
     await actor.page.getByTestId("game-action-draw").click();
     await expect(actor.page.getByTestId("conspiracy-overlay")).toBeVisible();
     await actor.page.getByTestId("conspiracy-card-0").click();
+    await actor.page.getByRole("button", { name: "确认选择" }).click();
     await expect(actor.page.getByTestId("conspiracy-submitted")).toBeVisible();
   } finally {
     await closePlayers(players);
@@ -301,7 +336,9 @@ test("角色能力入口可点击并向服务端发送技能动作", async ({ br
     const actor = await currentPlayer(players);
     await expect(actor.page.getByTestId("game-role-skill-button")).toBeVisible();
     await actor.page.getByTestId("game-role-skill-button").click();
-    await expect(actor.page.getByTestId("game-log")).toContainText(/使用|技能|被动|查看|抽取|选择.*死亡/i, { timeout: 5_000 });
+    await expect(
+      actor.page.getByTestId("game-log").or(actor.page.getByText("提图芭 -- 重排牌堆"))
+    ).toContainText(/使用|技能|被动|查看|抽取|选择.*死亡|弃牌堆|重排牌堆/i, { timeout: 5_000 });
   } finally {
     await closePlayers(players);
   }

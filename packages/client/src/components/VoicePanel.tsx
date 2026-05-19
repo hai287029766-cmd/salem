@@ -8,8 +8,10 @@ interface VoicePanelProps {
 }
 
 export default function VoicePanel({ micEnabled, connected, status, onToggleMic }: VoicePanelProps) {
+  if (!connected && status !== "connecting") return null;
+
   return (
-    <div className="fixed bottom-24 right-4 z-30 flex flex-col items-end gap-1">
+    <div className="fixed right-4 top-[calc(76px+env(safe-area-inset-top,0px))] z-30 flex flex-col items-end gap-1">
       <span
         data-testid="game-voice-connected"
         className="rounded-button bg-salem-bg-secondary/90 px-2 py-1 text-[10px] text-salem-text-secondary"

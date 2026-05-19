@@ -14,9 +14,9 @@ export const CARD_DEFINITIONS: Record<CardType, CardDefinition> = {
   piety: { type: "piety", color: "blue", nameCn: "虔诚", nameEn: "Piety", description: "需要14点指控才能触发审判" },
   asylum: { type: "asylum", color: "blue", nameCn: "庇护", nameEn: "Asylum", description: "免受夜间击杀" },
   matchmaker: { type: "matchmaker", color: "blue", nameCn: "红线", nameEn: "Matchmaker", description: "绑定两名玩家命运，一死俱死" },
-  black_cat: { type: "black_cat", color: "blue", nameCn: "黑猫", nameEn: "Black Cat", description: "每次阴谋结算后，持有者的一张审判卡会被翻开" },
+  black_cat: { type: "black_cat", color: "blue", nameCn: "黑猫", nameEn: "Black Cat", description: "每次阴谋结算后，持有者的一张身份牌会被翻开" },
   night: { type: "night", color: "black", nameCn: "黑夜", nameEn: "Night", description: "触发夜间阶段" },
-  conspiracy: { type: "conspiracy", color: "black", nameCn: "阴谋", nameEn: "Conspiracy", description: "每名存活玩家从左边的玩家拿取一张未公开的审判卡" },
+  conspiracy: { type: "conspiracy", color: "black", nameCn: "阴谋", nameEn: "Conspiracy", description: "每名存活玩家从左边的玩家拿取一张未公开的身份牌" },
 };
 
 export const DECK_COMPOSITION: Record<CardType, number> = {
@@ -50,7 +50,7 @@ export const TRYAL_CARD_DISTRIBUTION: Record<number, { notWitch: number; witch: 
 
 export const CHARACTER_DEFINITIONS: CharacterDefinition[] = [
   { name: "samuel_parris", nameCn: "塞缪尔-帕里斯", nameEn: "Samuel Parris", ability: "游戏中两次，可以从弃牌堆抽取最多2张卡牌" },
-  { name: "thomas_danforth", nameCn: "托马斯-丹福斯", nameEn: "Thomas Danforth", ability: "如果你打出第6点指控，你可以翻开该玩家的一张审判卡" },
+  { name: "thomas_danforth", nameCn: "托马斯-丹福斯", nameEn: "Thomas Danforth", ability: "如果你打出第6点指控，你可以翻开该玩家的一张身份牌" },
   { name: "tituba", nameCn: "提图芭", nameEn: "Tituba", ability: "游戏中一次，在你回合开始时可以查看并重新排列整个牌堆，限时1分钟" },
   { name: "john_proctor", nameCn: "约翰-普罗克特", nameEn: "John Proctor", ability: "当一名玩家死亡时，可以查看该玩家的手牌并挑选" },
   { name: "mary_warren", nameCn: "玛丽-沃伦", nameEn: "Mary Warren", ability: "不受红线效果影响" },

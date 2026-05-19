@@ -119,7 +119,7 @@ export default function Home() {
       {showRules && (
         <ConfirmDialog
           title="Salem 1692 玩法简介"
-          message="每位玩家拥有审判卡（身份卡），身份可能是女巫、警长或普通镇民。白天通过打出指控卡来揭露女巫；夜间女巫选择击杀目标。当所有女巫被揭露或女巫人数等于镇民时游戏结束。"
+          message="每位玩家拥有隐藏身份牌，身份可能是女巫、警长或镇民。白天可出牌指控他人，达到门槛后翻开身份牌；也可以抽牌，但抽牌会直接结束回合。夜间女巫选择击杀目标，警长选择保护对象。"
           confirmText="了解了"
           onConfirm={() => setShowRules(false)}
         />

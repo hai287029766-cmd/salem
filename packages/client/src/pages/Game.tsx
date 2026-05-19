@@ -1,12 +1,13 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { BookOpen, ScrollText, Users } from "lucide-react";
+import { BookOpen, Flame, HelpCircle, ScrollText, Shield, Users, X } from "lucide-react";
 import { useColyseus } from "../hooks/useColyseus";
 import { useGameState } from "../hooks/useGameState";
 import { useVoiceConnection } from "../hooks/useVoiceConnection";
 import { useSound } from "../hooks/useSound";
 import type { Room } from "colyseus.js";
-import type { CardType } from "@salem/shared";
+import { CHARACTER_DEFINITIONS } from "@salem/shared";
+import type { CardType, CharacterName } from "@salem/shared";
 import PlayerSeat from "../components/PlayerSeat";
 import CardHandStrip from "../components/CardHandStrip";
 import ActionPanel from "../components/ActionPanel";
@@ -26,6 +27,7 @@ import Toast from "../components/Toast";
 
 type ActionMode = "idle" | "play_card" | "select_target";
 type TabId = "game" | "log";
+type ToastItem = { id: number; message: string };
 
 const PHASE_LABELS: Record<string, { name: string; sub: string }> = {
   lobby: { name: "大厅", sub: "等待中" },
@@ -33,7 +35,7 @@ const PHASE_LABELS: Record<string, { name: string; sub: string }> = {
   dawn: { name: "黎明", sub: "放置黑猫" },
   day_turn: { name: "白天", sub: "进行操作" },
   tryal: { name: "审判", sub: "揭露身份" },
-  conspiracy: { name: "传染", sub: "传递身份牌" },
+  conspiracy: { name: "阴谋", sub: "传递身份牌" },
   night_witch: { name: "夜间", sub: "女巫行动" },
   night_constable: { name: "夜间", sub: "警长保护" },
   night_confess: { name: "夜间", sub: "认罪或沉默" },
@@ -56,11 +58,14 @@ export default function Game() {
   const [showConfessConfirm, setShowConfessConfirm] = useState(false);
   const [selectedConfessIndex, setSelectedConfessIndex] = useState<number>(-1);
   const [conspiracySubmitted, setConspiracySubmitted] = useState(false);
-  const [playedThisTurn, setPlayedThisTurn] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("game");
   const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null);
   const [primaryTargetId, setPrimaryTargetId] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastQueue, setToastQueue] = useState<ToastItem[]>([]);
+  const [showRules, setShowRules] = useState(false);
+  const [roleRevealDismissed, setRoleRevealDismissed] = useState(false);
+  const toastIdRef = useRef(0);
+  const selectedCardIndexesRef = useRef<number[]>([]);
 
   useEffect(() => {
     if (activeRoom && activeRoom !== room) setRoom(activeRoom);
@@ -100,18 +105,45 @@ export default function Game() {
   const isMyTurn = state?.currentPlayerId === myId;
   const isCoordinator = state?.coordinatorId === myId;
   const phase = state?.gamePhase ?? "lobby";
+  const isMyDayTurn = isMyTurn && phase === "day_turn";
   const isNightPhase = phase === "night_witch" || phase === "night_constable" || phase === "night_confess" || phase === "night_resolve";
-  const canEndTurn = isMyTurn && Boolean(state?.currentTurnCanEnd || playedThisTurn);
+  const canEndTurn = isMyDayTurn && Boolean(state?.currentTurnCanEnd);
+  const currentPlayerName = players.find((p) => p.id === state?.currentPlayerId)?.name ?? "";
+  const voiceVisible = voiceConnected || voiceStatus === "connecting";
+  const activeToast = toastQueue[0] ?? null;
+
+  const pushToast = useCallback((message: string) => {
+    setToastQueue((prev) => [...prev, { id: toastIdRef.current++, message }]);
+  }, []);
+
+  const dismissToast = useCallback(() => {
+    setToastQueue((prev) => prev.slice(1));
+  }, []);
+
+  const dismissRoleReveal = useCallback(() => {
+    setRoleRevealDismissed(true);
+  }, []);
 
   useEffect(() => {
     if (lastEvent?.type === "sound_effect" && lastEvent.sound) {
       play(lastEvent.sound);
     }
-    if ((lastEvent as unknown as { type: string })?.type === "constable_auto_protect") {
-      const targetName = (lastEvent as unknown as { targetName: string }).targetName;
-      setToastMessage(`超时，已随机保护 ${targetName}`);
+    if (lastEvent?.type === "constable_auto_protect") {
+      pushToast(`超时，已随机保护 ${lastEvent.targetName}`);
     }
-  }, [lastEvent, play]);
+    if (lastEvent?.type === "draw_result") {
+      pushToast(`抽到 ${lastEvent.count} 张牌`);
+    }
+    if (lastEvent?.type === "role_changed") {
+      pushToast(lastEvent.message);
+    }
+    if (lastEvent?.type === "protection_result") {
+      pushToast(lastEvent.saved ? `你的保护拯救了 ${lastEvent.targetName}` : `已保护 ${lastEvent.targetName}`);
+    }
+    if (lastEvent?.type === "action_rejected") {
+      pushToast(lastEvent.message);
+    }
+  }, [lastEvent, play, pushToast]);
 
   // Auto-expand current turn player
   useEffect(() => {
@@ -120,10 +152,11 @@ export default function Game() {
     }
   }, [state?.currentPlayerId, phase]);
 
-  useEffect(() => { setConspiracySubmitted(false); }, [phase, state?.round]);
+  useEffect(() => { setConspiracySubmitted(false); setShowConfess(false); }, [phase, state?.round]);
+  useEffect(() => { setRoleRevealDismissed(false); }, [state?.roomCode]);
   useEffect(() => {
-    setPlayedThisTurn(false);
     setActionMode("idle");
+    selectedCardIndexesRef.current = [];
     setSelectedCards([]);
     setSelectedCardIndexes([]);
     setPrimaryTargetId(null);
@@ -134,82 +167,93 @@ export default function Game() {
   }, []);
 
   const handleSelectCard = useCallback((card: CardType, index: number) => {
-    setSelectedCardIndexes((prevIndexes) => {
-      const removing = prevIndexes.includes(index);
-      setSelectedCards((prevCards) => {
-        if (removing) {
-          const next = [...prevCards];
-          const at = next.indexOf(card);
-          if (at >= 0) next.splice(at, 1);
-          return next;
-        }
-        return [...prevCards, card];
-      });
-      if (removing && (card === "robbery" || card === "scapegoat")) {
-        setPrimaryTargetId(null);
-      }
-      return removing ? prevIndexes.filter((i) => i !== index) : [...prevIndexes, index];
-    });
-    setActionMode("select_target");
-  }, []);
+    const removing = selectedCardIndexesRef.current.includes(index);
+    const nextIndexes = removing
+      ? selectedCardIndexesRef.current.filter((i) => i !== index)
+      : [...selectedCardIndexesRef.current, index];
+    const handCards = myPlayer?.handCards ?? [];
+    const nextCards = nextIndexes
+      .map((i) => handCards[i])
+      .filter((item): item is CardType => Boolean(item));
+
+    selectedCardIndexesRef.current = nextIndexes;
+    setSelectedCardIndexes(nextIndexes);
+    setSelectedCards(nextCards);
+
+    if (removing && (card === "robbery" || card === "scapegoat")) {
+      setPrimaryTargetId(null);
+    }
+    setActionMode(nextIndexes.length > 0 ? "select_target" : "play_card");
+  }, [myPlayer?.handCards]);
 
   const needsTwoTargets = selectedCards.some(
     (c) => c === "robbery" || c === "scapegoat"
   );
 
   const handleTargetPlayer = useCallback((targetId: string) => {
-    if (actionMode !== "select_target" || selectedCards.length === 0) return;
+    const handCards = myPlayer?.handCards ?? [];
+    const cardsToPlay = selectedCardIndexesRef.current
+      .map((index) => handCards[index])
+      .filter((item): item is CardType => Boolean(item));
+    if (actionMode !== "select_target" || cardsToPlay.length === 0) return;
 
-    if (needsTwoTargets && !primaryTargetId) {
+    const cardsNeedTwoTargets = cardsToPlay.some(
+      (c) => c === "robbery" || c === "scapegoat"
+    );
+
+    if (cardsNeedTwoTargets && !primaryTargetId) {
       setPrimaryTargetId(targetId);
       return;
     }
 
     sendMessage({
       type: "play_cards",
-      cards: selectedCards,
+      cards: cardsToPlay,
       targetId: primaryTargetId || targetId,
       secondaryTargetId: primaryTargetId ? targetId : undefined,
     });
-    play("card_play");
+    selectedCardIndexesRef.current = [];
     setSelectedCards([]);
     setSelectedCardIndexes([]);
     setPrimaryTargetId(null);
-    setPlayedThisTurn(true);
     setActionMode("play_card");
-  }, [actionMode, selectedCards, needsTwoTargets, primaryTargetId, sendMessage, play]);
+  }, [actionMode, myPlayer?.handCards, primaryTargetId, sendMessage]);
 
   const handleDrawCards = useCallback(() => {
+    if (phase !== "day_turn") return;
     sendMessage({ type: "draw_cards" });
-    play("card_draw");
     setActionMode("idle");
+    selectedCardIndexesRef.current = [];
     setSelectedCards([]);
     setSelectedCardIndexes([]);
-  }, [sendMessage, play]);
+  }, [phase, sendMessage]);
 
   const handlePlayMode = useCallback(() => {
+    if (phase !== "day_turn") return;
     setActionMode("play_card");
-  }, []);
+  }, [phase]);
 
   const handleCancelPlayMode = useCallback(() => {
     setActionMode("idle");
+    selectedCardIndexesRef.current = [];
     setSelectedCards([]);
     setSelectedCardIndexes([]);
     setPrimaryTargetId(null);
   }, []);
 
   const handleEndTurn = useCallback(() => {
-    if (canEndTurn) sendMessage({ type: "end_turn" });
+    if (phase !== "day_turn") return;
+    sendMessage({ type: "end_turn" });
     setActionMode("idle");
+    selectedCardIndexesRef.current = [];
     setSelectedCards([]);
     setSelectedCardIndexes([]);
-  }, [canEndTurn, sendMessage]);
+  }, [phase, sendMessage]);
 
   const handleUseCharacterSkill = useCallback(() => {
     if (!myPlayer?.characterName) return;
     if (myPlayer.characterName === "samuel_parris") {
       sendMessage({ type: "use_character_skill", cardCount: 2 });
-      setPlayedThisTurn(true);
       return;
     }
     if (myPlayer.characterName === "tituba") {
@@ -238,8 +282,7 @@ export default function Game() {
 
   const handleWitchPlaceBlackCat = useCallback((targetId: string) => {
     sendMessage({ type: "witch_place_blackcat", targetId });
-    play("card_play");
-  }, [sendMessage, play]);
+  }, [sendMessage]);
 
   const handleConstableProtect = useCallback((targetId: string) => {
     sendMessage({ type: "constable_protect", targetId });
@@ -252,7 +295,8 @@ export default function Game() {
 
   const handleDeclineConfess = useCallback(() => {
     sendMessage({ type: "decline_confess" });
-  }, [sendMessage]);
+    pushToast("已选择不认罪");
+  }, [sendMessage, pushToast]);
 
   const confirmConfess = useCallback(() => {
     if (selectedConfessIndex >= 0) {
@@ -265,14 +309,12 @@ export default function Game() {
 
   const handleTryalChoice = useCallback((targetId: string, cardIndex: number) => {
     sendMessage({ type: "choose_tryal_card", targetId, cardIndex });
-    play("card_flip");
-  }, [sendMessage, play]);
+  }, [sendMessage]);
 
   const handleConspiracyPass = useCallback((cardIndex: number) => {
     sendMessage({ type: "conspiracy_pass", cardIndex });
     setConspiracySubmitted(true);
-    play("card_flip");
-  }, [sendMessage, play]);
+  }, [sendMessage]);
 
   if (!state || !myId) {
     return (
@@ -303,6 +345,14 @@ export default function Game() {
           <span data-testid="game-round" className="sr-only">{state.round}</span>
           <Timer seconds={state.timer} isPaused={state.isPaused} />
         </div>
+        <button
+          type="button"
+          className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-button text-salem-text-ink hover:text-salem-accent-gold hover:bg-salem-accent-gold/10"
+          onClick={() => setShowRules(true)}
+          aria-label="查看规则"
+        >
+          <HelpCircle size={18} />
+        </button>
       </header>
 
       {/* Coordinator bar */}
@@ -318,7 +368,7 @@ export default function Game() {
       )}
 
       {/* === Main content (tab-driven) === */}
-      <div className="flex-1 overflow-y-auto pb-40">
+      <div className="flex-1 overflow-y-auto pb-[calc(11rem+env(safe-area-inset-bottom,0px))]">
         {/* GAME tab — unified players + hand */}
         {activeTab === "game" && (
           <div className="flex flex-col gap-2 px-3 py-3">
@@ -361,19 +411,19 @@ export default function Game() {
           cards={myPlayer.handCards}
           selectedCardIndexes={selectedCardIndexes}
           onSelectCard={handleSelectCard}
-          disabled={!isMyTurn || actionMode === "idle"}
+          disabled={!isMyDayTurn || actionMode === "idle"}
           isPlayMode={actionMode !== "idle"}
           characterName={myPlayer.characterName}
           characterLabel={getSkillTooltip(myPlayer.characterName)}
           onUseSkill={handleUseCharacterSkill}
-          skillDisabled={!isMyTurn && myPlayer.characterName !== "john_proctor"}
+          skillDisabled={!isMyDayTurn && myPlayer.characterName !== "john_proctor"}
           skillLabel={getSkillButtonLabel(myPlayer.characterName)}
         />
       )}
 
       {/* === Action bar (always visible during game) === */}
       <ActionPanel
-        isMyTurn={isMyTurn}
+        isMyTurn={isMyDayTurn}
         actionMode={actionMode}
         onPlayMode={handlePlayMode}
         onDrawCards={handleDrawCards}
@@ -381,18 +431,21 @@ export default function Game() {
         onEndTurn={handleEndTurn}
         canEndTurn={canEndTurn}
         round={state.round}
+        currentPlayerName={currentPlayerName}
       />
 
       {/* === Bottom tab navigation === */}
       <BottomTabs activeTab={activeTab} onChangeTab={setActiveTab} />
 
       {/* Voice panel (floating) */}
-      <VoicePanel
-        micEnabled={micEnabled}
-        connected={voiceConnected}
-        status={voiceStatus}
-        onToggleMic={toggleMic}
-      />
+      {voiceVisible && (
+        <VoicePanel
+          micEnabled={micEnabled}
+          connected={voiceConnected}
+          status={voiceStatus}
+          onToggleMic={toggleMic}
+        />
+      )}
 
       {/* === Overlays === */}
       {isNightPhase && (
@@ -452,7 +505,7 @@ export default function Game() {
       {showConfessConfirm && (
         <ConfirmDialog
           title="确认认罪"
-          message="翻开一张审判卡来渡过本轮。此操作无法撤销。"
+          message="翻开一张身份牌来渡过本轮。此操作无法撤销。"
           confirmText="确认"
           cancelText="取消"
           onConfirm={confirmConfess}
@@ -472,10 +525,22 @@ export default function Game() {
         />
       )}
 
+      {showRules && <RulesModal onClose={() => setShowRules(false)} />}
+
+      {roleInfo && myPlayer && phase !== "lobby" && phase !== "game_over" && !roleRevealDismissed && (
+        <RoleRevealOverlay
+          roleInfo={roleInfo}
+          characterName={myPlayer.characterName}
+          characterLabel={getCharacterLabel(myPlayer.characterName)}
+          characterAbility={myPlayer.characterAbility}
+          onClose={dismissRoleReveal}
+        />
+      )}
+
       <PhaseTransition phase={phase} />
 
-      {toastMessage && (
-        <Toast message={toastMessage} duration={4000} onDismiss={() => setToastMessage(null)} />
+      {activeToast && (
+        <Toast key={activeToast.id} message={activeToast.message} duration={4000} onDismiss={dismissToast} />
       )}
     </div>
   );
@@ -540,6 +605,113 @@ function BottomTabs({
       })}
     </nav>
   );
+}
+
+function RulesModal({ onClose }: { onClose: () => void }) {
+  const sections = [
+    {
+      title: "白天",
+      body: "轮到你时，选择出牌攻击或支援其他玩家；也可以抽牌，抽牌会直接结束本回合。指控达到门槛后进入审判。",
+    },
+    {
+      title: "身份牌",
+      body: "每人持有若干隐藏身份牌。女巫阵营需要隐藏身份，镇民阵营需要通过审判翻出女巫。",
+    },
+    {
+      title: "夜间",
+      body: "女巫投票选择击杀目标，警长选择保护一名其他玩家。认罪可翻开一张身份牌换取本轮免死。",
+    },
+    {
+      title: "胜利",
+      body: "所有女巫身份被揭露时镇民获胜；女巫人数达到或超过镇民阵营存活人数时女巫获胜。",
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-[390px] rounded-card border border-salem-accent-gold/25 bg-salem-bg-secondary p-4 shadow-card">
+        <button
+          type="button"
+          className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-button text-salem-text-ink hover:bg-salem-accent-gold/10 hover:text-salem-accent-gold"
+          onClick={onClose}
+          aria-label="关闭规则"
+        >
+          <X size={18} />
+        </button>
+        <h2 className="font-heading text-xl text-salem-accent-gold">游戏规则</h2>
+        <div className="mt-4 space-y-3">
+          {sections.map((section) => (
+            <section key={section.title} className="rounded-card border border-salem-accent-gold/12 bg-black/18 p-3">
+              <h3 className="font-heading text-sm text-salem-text-bright">{section.title}</h3>
+              <p className="mt-1 text-xs leading-relaxed text-salem-text-secondary">{section.body}</p>
+            </section>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RoleRevealOverlay({
+  roleInfo,
+  characterName,
+  characterLabel,
+  characterAbility,
+  onClose,
+}: {
+  roleInfo: { isWitch: boolean; isConstable: boolean };
+  characterName: string;
+  characterLabel: string;
+  characterAbility: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const timer = window.setTimeout(onClose, 9000);
+    return () => window.clearTimeout(timer);
+  }, [onClose]);
+
+  const identityLabel = roleInfo.isWitch ? "女巫" : "镇民";
+  const identityIcon = roleInfo.isWitch
+    ? <Flame size={28} className="text-[#c090e0]" />
+    : <Users size={28} className="text-salem-townfolk" />;
+
+  return (
+    <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/75 px-5 backdrop-blur-sm">
+      <div className="w-full max-w-[360px] rounded-card border border-salem-accent-gold/30 bg-salem-bg-secondary p-5 text-center shadow-card">
+        <p className="font-heading text-xs uppercase tracking-[0.22em] text-salem-text-ink">你的身份</p>
+        <div className="mt-4 flex items-center justify-center gap-3">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full border border-salem-accent-gold/25 bg-black/25">
+            {identityIcon}
+          </span>
+          <div className="text-left">
+            <h2 className="font-heading text-2xl text-salem-text-bright">{identityLabel}</h2>
+            {roleInfo.isConstable && (
+              <p className="mt-1 inline-flex items-center gap-1 text-xs text-[#80b8e0]">
+                <Shield size={13} />
+                同时持有警长身份牌
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-card border border-salem-accent-gold/15 bg-black/20 p-3 text-left">
+          <p className="font-heading text-sm text-salem-accent-gold">{characterLabel || characterName}</p>
+          <p className="mt-1 text-xs leading-relaxed text-salem-text-secondary">
+            {characterAbility || "该角色能力由规则引擎自动结算。"}
+          </p>
+        </div>
+
+        <button className="btn-primary mt-5 w-full" onClick={onClose}>
+          进入游戏
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function getCharacterLabel(characterName: string): string {
+  const definition = CHARACTER_DEFINITIONS.find((item) => item.name === (characterName as CharacterName));
+  return definition?.nameCn ?? characterName;
 }
 
 function getSkillButtonLabel(characterName: string): string {

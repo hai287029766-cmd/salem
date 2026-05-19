@@ -41,12 +41,19 @@ export type ServerEvent =
   | { type: "paused"; by: string }
   | { type: "resumed"; by: string }
   | { type: "timer_extended"; seconds: number }
-  | { type: "log"; message: string };
+  | { type: "log"; message: string }
+  | { type: "constable_auto_protect"; targetName: string }
+  | { type: "constable_phase_info"; lastProtectedName: string }
+  | { type: "draw_result"; count: number }
+  | { type: "role_changed"; gained?: string; lost?: string; message: string }
+  | { type: "protection_result"; saved: boolean; targetName?: string }
+  | { type: "action_rejected"; message: string };
 
 export type SoundType =
   | "card_flip"
   | "card_play"
   | "card_draw"
+  | "card_deal"
   | "night_begin"
   | "dawn"
   | "gavel"

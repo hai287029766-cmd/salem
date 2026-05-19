@@ -72,7 +72,7 @@ export default function TryalOverlay({ state, myId, onChoose, lastEvent }: Tryal
     <div className="absolute inset-0 z-40 bg-black/80 flex flex-col items-center justify-center px-6">
       <h2 className="font-heading text-2xl text-salem-accent-gold mb-2">审判: {target.name}</h2>
       <p className="text-salem-text-ink text-sm mb-6">指控值已达门槛</p>
-      <p className="text-sm text-salem-text-primary mb-4">选择一张审判卡翻开:</p>
+      <p className="text-sm text-salem-text-primary mb-4">选择一张身份牌翻开:</p>
       <div className="flex gap-3 flex-wrap justify-center">
         {cardSlots.map((i) => {
           const parsed = parseTryalCard(target.publicTryalCards[i]);

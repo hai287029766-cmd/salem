@@ -6,6 +6,7 @@ const SOUND_FILES: Record<SoundType, string> = {
   card_flip: "/assets/sounds/card-flip.wav",
   card_play: "/assets/sounds/card-play.wav",
   card_draw: "/assets/sounds/card-draw.wav",
+  card_deal: "/assets/sounds/card-flip.wav",
   night_begin: "/assets/sounds/night-begin.wav",
   dawn: "/assets/sounds/dawn.wav",
   gavel: "/assets/sounds/gavel.wav",

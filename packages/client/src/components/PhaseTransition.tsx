@@ -25,13 +25,13 @@ const PHASE_CONFIGS: Partial<Record<GamePhase, PhaseConfig>> = {
   },
   night_confess: {
     title: "认罪窗口",
-    subtitle: "翻开审判卡以渡过夜晚",
+    subtitle: "翻开身份牌以渡过夜晚",
     icon: <Skull size={48} className="text-salem-accent-red" />,
     bgGradient: "linear-gradient(180deg, rgba(26,10,10,0.85) 0%, rgba(46,26,26,0.85) 50%, rgba(23,13,13,0.85) 100%)",
   },
   conspiracy: {
     title: "阴谋开始",
-    subtitle: "从左边的玩家拿取一张未公开的审判卡",
+    subtitle: "从左边的玩家拿取一张未公开的身份牌",
     icon: <Users size={48} className="text-[#c090e0]" />,
     bgGradient: "linear-gradient(180deg, rgba(21,8,26,0.85) 0%, rgba(42,21,53,0.85) 50%, rgba(13,8,23,0.85) 100%)",
   },

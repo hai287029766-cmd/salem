@@ -82,49 +82,55 @@ export default function PlayerSeat({
 
       {/* Header (always visible) */}
       <div
-        className="flex items-center gap-3 px-3.5 py-3 cursor-pointer min-h-[56px]"
+        className="px-3.5 py-3 cursor-pointer"
         onClick={selectable ? undefined : onToggle}
         role="button"
         aria-expanded={expanded}
       >
-        {/* Portrait */}
-        <Portrait isDead={isDead} isSelf={isSelf} isCurrentTurn={isCurrentTurn} />
+        <div className="flex items-center gap-3 min-h-[48px]">
+          {/* Portrait */}
+          <Portrait isDead={isDead} isSelf={isSelf} isCurrentTurn={isCurrentTurn} />
 
-        {/* Name */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <h3 className="truncate font-heading text-[15px] text-salem-text-bright leading-tight">
-              {player.name}
-            </h3>
-            {isSelf && (
-              <span className="text-salem-accent-gold text-xs font-heading">
-                {" "}我
-              </span>
+          {/* Name */}
+          <div className="flex-1 min-w-0 pr-1">
+            <div className="flex items-start gap-1.5">
+              <h3
+                className="font-heading text-[15px] text-salem-text-bright leading-tight break-words [overflow-wrap:anywhere]"
+                title={player.name}
+              >
+                {player.name}
+              </h3>
+              {isSelf && (
+                <span className="shrink-0 text-salem-accent-gold text-xs font-heading">
+                  我
+                </span>
+              )}
+            </div>
+            {characterLabel && (
+              <p className="text-[11px] text-salem-text-ink italic truncate mt-0.5">
+                {characterLabel}
+              </p>
             )}
           </div>
-          {characterLabel && (
-            <p className="text-[11px] text-salem-text-ink italic truncate mt-0.5">
-              {characterLabel}
-            </p>
-          )}
+
+          {/* Compact status badges */}
+          <CompactStatusBadges player={player} />
+
+          {/* Expand arrow */}
+          <ChevronDown
+            size={14}
+            className={`text-salem-text-ink transition-transform duration-300 shrink-0 ${
+              expanded ? "rotate-180" : ""
+            }`}
+          />
         </div>
 
-        {/* Compact status badges */}
-        <CompactStatusBadges player={player} />
-
-        {/* Identity strip (compact) */}
-        <IdentityStrip player={player} isSelf={isSelf} />
-
-        {/* Rope knots (compact) */}
-        <RopeKnotsCompact points={player.accusationPoints} max={getEffectiveThreshold(player)} />
-
-        {/* Expand arrow */}
-        <ChevronDown
-          size={14}
-          className={`text-salem-text-ink transition-transform duration-300 shrink-0 ${
-            expanded ? "rotate-180" : ""
-          }`}
-        />
+        <div className="mt-2 ml-14 flex items-center justify-between gap-2 overflow-hidden">
+          <div className="min-w-0 flex-1 overflow-x-auto scrollbar-hide">
+            <IdentityStrip player={player} isSelf={isSelf} />
+          </div>
+          <RopeKnotsCompact points={player.accusationPoints} max={getEffectiveThreshold(player)} />
+        </div>
       </div>
 
       {/* Expanded body */}
@@ -296,7 +302,7 @@ function EnvelopeRow({
     <div data-testid={testId}>
       <p className="text-[10px] text-salem-text-ink uppercase tracking-widest mb-2 flex items-center gap-1.5">
         <Flame size={10} />
-        身份封印
+        身份牌
       </p>
       <div className="flex gap-2 justify-center">
         {Array.from({ length: count }, (_, i) => {

@@ -64,7 +64,7 @@ export default function CardHandStrip({
 
   return (
     <>
-      <div className="fixed bottom-[88px] left-0 right-0 max-w-[430px] mx-auto border-t border-salem-accent-gold/10 bg-salem-bg-dark/95 backdrop-blur-sm px-3 py-1 z-[22]">
+      <div className="fixed bottom-[calc(88px+env(safe-area-inset-bottom,0px))] left-0 right-0 max-w-[430px] mx-auto border-t border-salem-accent-gold/10 bg-salem-bg-dark/95 backdrop-blur-sm px-3 py-1 z-[22]">
         <div className="flex items-center gap-2">
           {characterName && onUseSkill && (
             <button

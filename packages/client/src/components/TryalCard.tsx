@@ -12,7 +12,7 @@ interface TryalCardProps {
 
 const TYPE_LABELS: Record<TryalCardType, string> = {
   witch: "女巫",
-  not_witch: "村民",
+  not_witch: "镇民",
   constable: "警长",
 };
 

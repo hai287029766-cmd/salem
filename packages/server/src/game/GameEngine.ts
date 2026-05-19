@@ -306,7 +306,7 @@ export class GameEngine {
   private handleConspiracyPhase(): void {
     this.conspiracyChoices.clear();
     this.broadcast("sound_effect", { sound: "card_flip" });
-    this.addLog("阴谋！每名存活玩家从左边的玩家处拿取一张未公开的审判卡");
+    this.addLog("阴谋！每名存活玩家从左边的玩家处拿取一张未公开的身份牌");
 
     this.startTimer(TIMER_DEFAULTS.conspiracy, () => {
       // Auto-assign for players who did not choose
@@ -351,7 +351,6 @@ export class GameEngine {
     const lastProtectedName = this.lastConstableProtectTargetId
       ? this.state.players.get(this.lastConstableProtectTargetId)?.name ?? ""
       : "";
-    this.lastConstableProtectTargetId = this.constableProtectTargetId;
     this.constableProtectTargetId = "";
 
     this.sendToPlayer(constable.id, "constable_phase_info", { lastProtectedName });
@@ -366,7 +365,9 @@ export class GameEngine {
           ].id;
           const targetName = this.state.players.get(this.constableProtectTargetId)?.name ?? "未知";
           this.addLog(`警长超时，随机保护了 ${targetName}`);
+          this.lastConstableProtectTargetId = this.constableProtectTargetId;
           this.sendToPlayer(constable.id, "constable_auto_protect", { targetName });
+          this.sendToPlayer(constable.id, "protection_result", { saved: false, targetName });
         }
       }
       this.transitionTo("night_confess");
@@ -375,7 +376,7 @@ export class GameEngine {
 
   private handleNightConfessPhase(): void {
     this.declinedConfessPlayerIds.clear();
-    this.addLog("认罪窗口 -- 翻开一张审判卡来渡过夜晚");
+    this.addLog("认罪窗口 -- 翻开一张身份牌来渡过夜晚");
 
     this.startTimer(TIMER_DEFAULTS.nightConfess, () => {
       this.transitionTo("night_resolve");
@@ -407,6 +408,10 @@ export class GameEngine {
     if (isProtected) {
       this.addLog(`${target.name} 受到警长的保护`);
       this.broadcast("sound_effect", { sound: "card_flip" });
+      const constable = this.getAlivePlayers().find((p) => p.isConstable);
+      if (constable) {
+        this.sendToPlayer(constable.id, "protection_result", { saved: true, targetName: target.name });
+      }
     } else if (hasConfessed) {
       this.addLog(`${target.name} 认罪并渡过夜晚`);
     } else if (hasAsylum) {
@@ -512,23 +517,23 @@ export class GameEngine {
   // -- Player Actions --
 
   handlePlayCards(playerId: string, cards: CardType[], targetId: string, secondaryTargetId?: string): boolean {
-    if (this.state.gamePhase !== "day_turn") return false;
-    if (this.state.currentPlayerId !== playerId) return false;
-    if (this.state.isPaused) return false;
+    if (this.state.gamePhase !== "day_turn") return this.rejectAction(playerId, "现在不能出牌");
+    if (this.state.currentPlayerId !== playerId) return this.rejectAction(playerId, "还没有轮到你");
+    if (this.state.isPaused) return this.rejectAction(playerId, "游戏暂停中");
 
     const player = this.state.players.get(playerId);
     const target = this.state.players.get(targetId);
-    if (!player || !target || !player.isAlive || !target.isAlive) return false;
+    if (!player || !target || !player.isAlive || !target.isAlive) return this.rejectAction(playerId, "目标无效");
 
     // Salem First Law: cannot play cards on yourself
-    if (playerId === targetId) return false;
+    if (playerId === targetId) return this.rejectAction(playerId, "不能对自己出牌");
 
-    if (!this.canPlayCards(player, cards, targetId, secondaryTargetId)) return false;
+    if (!this.canPlayCards(player, cards, targetId, secondaryTargetId)) return this.rejectAction(playerId, "这张牌当前不能这样使用");
 
     const handAfterPlay = Array.from(player.handCards) as CardType[];
     for (const card of cards) {
       const idx = handAfterPlay.indexOf(card);
-      if (idx === -1) return false;
+      if (idx === -1) return this.rejectAction(playerId, "手牌已变化，请重新选择");
       handAfterPlay.splice(idx, 1);
     }
 
@@ -629,6 +634,7 @@ export class GameEngine {
     this.state.deckRemaining = this.deck.getDeckSize();
     this.broadcast("sound_effect", { sound: "card_draw" });
     this.addLog(`${player.name} 抽了${drawnCount}张卡牌`);
+    this.sendToPlayer(playerId, "draw_result", { count: drawnCount });
 
     // Normal draw: advance turn
     this.endCurrentDayTurn();
@@ -812,7 +818,9 @@ export class GameEngine {
     if (!target || !target.isAlive) return false;
 
     this.constableProtectTargetId = targetId;
+    this.lastConstableProtectTargetId = targetId;
     this.addLog("警长已放置保护");
+    this.sendToPlayer(playerId, "protection_result", { saved: false, targetName: target.name });
 
     // Advance immediately
     this.clearTimer();
@@ -843,7 +851,7 @@ export class GameEngine {
     player.tryalCardFaceUp++;
     this.syncTryalCards(playerId);
 
-    this.addLog(`${player.name} 认罪并翻开一张审判卡`);
+    this.addLog(`${player.name} 认罪并翻开一张身份牌`);
 
     this.broadcast("card_revealed", {
       playerId,
@@ -851,9 +859,11 @@ export class GameEngine {
       cardIndex,
     });
 
+    this.refreshPlayerRoles(playerId);
+
     // Check if all cards face up => death
     if (shouldPlayerDie(tryalCards)) {
-      this.killPlayer(playerId, "认罪导致所有审判卡被翻开");
+      this.killPlayer(playerId, "认罪导致所有身份牌被翻开");
     }
 
     // Check win conditions
@@ -945,8 +955,8 @@ export class GameEngine {
     target.tryalCardFaceUp++;
     this.syncTryalCards(targetId);
 
-    const tryalTypeCn = card.type === "witch" ? "女巫" : card.type === "constable" ? "警长" : "村民";
-    this.addLog(`${target.name}的一张审判卡被翻开：${tryalTypeCn}`);
+    const tryalTypeCn = card.type === "witch" ? "女巫" : card.type === "constable" ? "警长" : "镇民";
+    this.addLog(`${target.name}的一张身份牌被翻开：${tryalTypeCn}`);
 
     this.broadcast("card_revealed", {
       playerId: targetId,
@@ -968,21 +978,11 @@ export class GameEngine {
     );
     target.accusationPoints = 0;
 
-    // Check if constable card revealed -- constable role is lost
-    if (card.type === "constable") {
-      const constableOwner = this.getAlivePlayers().find(
-        (p) => p.id === targetId && p.isConstable
-      );
-      if (constableOwner) {
-        constableOwner.isConstable = false;
-        this.addLog(`${target.name} 是警长 -- 该角色现已空缺`);
-        this.sendRoleInfo(targetId);
-      }
-    }
+    this.refreshPlayerRoles(targetId);
 
     // Check if player dies (all tryal cards face up)
     if (shouldPlayerDie(tryalCards)) {
-      this.killPlayer(targetId, "所有审判卡被翻开");
+      this.killPlayer(targetId, "所有身份牌被翻开");
     }
 
     // Check win conditions
@@ -1128,6 +1128,11 @@ export class GameEngine {
       message: "该角色能力为被动技能或已由规则引擎自动结算",
     });
     return true;
+  }
+
+  private rejectAction(playerId: string, message: string): false {
+    this.sendToPlayer(playerId, "action_rejected", { message });
+    return false;
   }
 
   setTopDeckCardForTest(card: CardType): boolean {
@@ -1552,8 +1557,8 @@ export class GameEngine {
           catCards[firstFaceDown].faceUp = true;
           this.syncTryalCards(this.state.blackCatOwnerId);
           const typeCn = catCards[firstFaceDown].type === "witch" ? "女巫"
-            : catCards[firstFaceDown].type === "constable" ? "警长" : "村民";
-          this.addLog(`黑猫效果 -- ${catHolder.name}的一张审判卡被翻开：${typeCn}`);
+            : catCards[firstFaceDown].type === "constable" ? "警长" : "镇民";
+          this.addLog(`黑猫效果 -- ${catHolder.name}的一张身份牌被翻开：${typeCn}`);
           this.broadcast("card_revealed", {
             playerId: this.state.blackCatOwnerId,
             cardType: catCards[firstFaceDown].type,
@@ -1561,11 +1566,7 @@ export class GameEngine {
           });
           this.broadcast("sound_effect", { sound: "card_flip" });
 
-          if (catCards[firstFaceDown].type === "constable" && catHolder.isConstable) {
-            catHolder.isConstable = false;
-            this.addLog(`${catHolder.name} 是警长 -- 该角色现已空缺`);
-            this.sendRoleInfo(this.state.blackCatOwnerId);
-          }
+          this.refreshPlayerRoles(this.state.blackCatOwnerId);
         }
       }
     }
@@ -1576,12 +1577,12 @@ export class GameEngine {
       if (shouldPlayerDie(cards)) {
         const p = this.state.players.get(playerId);
         if (p && p.isAlive) {
-          this.killPlayer(playerId, "所有审判卡已翻开");
+          this.killPlayer(playerId, "所有身份牌已翻开");
         }
       }
     }
 
-    this.addLog("阴谋已结算 -- 审判卡已交换");
+    this.addLog("阴谋已结算 -- 身份牌已交换");
 
     // Check win conditions
     const winResult = this.checkWin();
@@ -1817,6 +1818,8 @@ export class GameEngine {
     const player = this.state.players.get(playerId);
     if (!player) return;
 
+    const hadKnownWitchRole = player.hasBeenWitch;
+    const wasConstable = player.isConstable;
     const cards = this.tryalCardMap.get(playerId) ?? [];
     player.isWitch = cards.some((card) => card.type === "witch");
     if (player.isWitch) {
@@ -1829,6 +1832,29 @@ export class GameEngine {
     player.tryalCardCount = cards.length;
     this.syncTryalCards(playerId);
     this.sendRoleInfo(playerId);
+
+    const gained: string[] = [];
+    const lost: string[] = [];
+    if (!hadKnownWitchRole && player.hasBeenWitch) {
+      gained.push("女巫");
+    }
+    if (!wasConstable && player.isConstable) {
+      gained.push("警长");
+    }
+    if (wasConstable && !player.isConstable) {
+      lost.push("警长");
+    }
+
+    if (gained.length > 0 || lost.length > 0) {
+      const parts: string[] = [];
+      if (gained.length > 0) parts.push(`获得${gained.join("、")}身份`);
+      if (lost.length > 0) parts.push(`失去${lost.join("、")}能力`);
+      this.sendToPlayer(playerId, "role_changed", {
+        gained: gained.join("、") || undefined,
+        lost: lost.join("、") || undefined,
+        message: `身份变化：你${parts.join("，")}`,
+      });
+    }
   }
 
   sendRoleInfo(playerId: string): void {

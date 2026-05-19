@@ -12,6 +12,7 @@ interface ActionPanelProps {
   onEndTurn: () => void;
   canEndTurn: boolean;
   round?: number;
+  currentPlayerName?: string;
 }
 
 export default function ActionPanel({
@@ -23,6 +24,7 @@ export default function ActionPanel({
   onEndTurn,
   canEndTurn,
   round = 0,
+  currentPlayerName = "",
 }: ActionPanelProps) {
   const inPlayMode = actionMode === "play_card" || actionMode === "select_target";
   const [helpDismissed, setHelpDismissed] = useState(false);
@@ -31,10 +33,15 @@ export default function ActionPanel({
   const hintVisible = autoShow || showHelp;
 
   return (
-    <div className="fixed bottom-[46px] left-0 right-0 max-w-[430px] mx-auto flex flex-col border-t border-salem-accent-gold/10 bg-salem-bg-dark/95 backdrop-blur-sm px-4 py-1.5 z-20">
+    <div className="fixed bottom-[calc(46px+env(safe-area-inset-bottom,0px))] left-0 right-0 max-w-[430px] mx-auto flex flex-col border-t border-salem-accent-gold/10 bg-salem-bg-dark/95 backdrop-blur-sm px-4 py-1.5 z-20">
       {hintVisible && (
         <p className="text-[10px] text-salem-text-ink text-center mb-1">
-          你的回合: 先抽牌补充手牌，再出牌对他人使用，最后结束回合
+          你的回合: 出牌对他人使用，或抽牌(抽牌将直接结束回合)
+        </p>
+      )}
+      {!isMyTurn && !inPlayMode && (
+        <p className="text-[10px] text-salem-text-ink text-center mb-1 break-words [overflow-wrap:anywhere]">
+          等待{currentPlayerName ? ` ${currentPlayerName} ` : "其他玩家"}操作
         </p>
       )}
       <div className="flex items-center gap-3">

@@ -28,7 +28,7 @@ interface NightOverlayProps {
 
 const TRYAL_LABELS: Record<TryalCardType, string> = {
   witch: "女巫",
-  not_witch: "非女巫",
+  not_witch: "镇民",
   constable: "警长",
 };
 
@@ -397,7 +397,7 @@ function ConfessView({
         认罪窗口
       </p>
       <p className="text-sm text-salem-text-secondary text-center mb-4">
-        翻开一张审判卡换取本轮免死
+        翻开一张身份牌换取本轮免死
       </p>
       <Timer seconds={timer} isPaused={false} />
 
@@ -423,7 +423,7 @@ function ConfessView({
       ) : (
         <div className="mt-6 space-y-3">
           <p className="text-sm text-salem-text-primary text-center">
-            选择翻开哪张审判卡:
+            选择翻开哪张身份牌:
           </p>
           <div className="flex gap-3 justify-center">
             {cards.map((card) => (
@@ -474,7 +474,7 @@ function NightResolveView({
       return { icon: <Shield size={44} className="text-[#80b8e0]" />, lines: [`${result.protected} 受到了保护`, "警长的庇佑拯救了一条性命"], color: "text-[#80b8e0]" };
     }
     if (result.confessed) {
-      return { icon: <ScrollText size={44} className="text-salem-accent-gold" />, lines: [`${result.confessed} 选择了认罪`, "以身份卡换取今夜平安"], color: "text-salem-accent-gold" };
+      return { icon: <ScrollText size={44} className="text-salem-accent-gold" />, lines: [`${result.confessed} 选择了认罪`, "以身份牌换取今夜平安"], color: "text-salem-accent-gold" };
     }
     if (result.asylum) {
       return { icon: <Shield size={44} className="text-[#80b8e0]" />, lines: [`${result.asylum} 受到庇护的保护`, "庇护卡的力量化解了危机"], color: "text-[#80b8e0]" };

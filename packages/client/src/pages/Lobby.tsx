@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Crown, Mic, MicOff, Users } from "lucide-react";
+import { ArrowLeft, Check, Copy, Crown, Mic, MicOff, Users } from "lucide-react";
 import { useColyseus } from "../hooks/useColyseus";
 import { useGameState, type PlayerState } from "../hooks/useGameState";
 import { useVoiceConnection } from "../hooks/useVoiceConnection";
@@ -14,6 +14,7 @@ export default function Lobby() {
   const [room, setRoom] = useState<Room | null>(activeRoom);
   const { state, myId } = useGameState(room);
   const [coordinatorId, setCoordinatorId] = useState<string>("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (activeRoom && activeRoom !== room) {
@@ -42,6 +43,8 @@ export default function Lobby() {
   const isHost = myPlayer?.isHost ?? false;
   const allReady = players.filter((p) => !p.isHost).every((p) => p.isReady);
   const canStart = isHost && players.length >= MIN_PLAYERS && allReady;
+  const displayRoomCode = state?.roomCode || roomCode || "";
+  const voiceVisible = connected || voiceStatus === "connecting";
 
   const handleReady = useCallback(() => {
     sendMessage({ type: "ready" });
@@ -50,6 +53,17 @@ export default function Lobby() {
   const handleStart = useCallback(() => {
     sendMessage({ type: "start_game", coordinatorId: coordinatorId || undefined });
   }, [sendMessage, coordinatorId]);
+
+  const handleCopyRoomCode = useCallback(async () => {
+    if (!displayRoomCode) return;
+    try {
+      await navigator.clipboard.writeText(displayRoomCode);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  }, [displayRoomCode]);
 
   const renderSeat = (index: number) => {
     const player = players.find((p) => p.seatIndex === index);
@@ -78,15 +92,23 @@ export default function Lobby() {
         </button>
         <div className="text-center">
           <span className="font-heading text-lg text-salem-accent-gold tracking-[0.2em]">
-            <span data-testid="lobby-room-code">{state?.roomCode || roomCode}</span>
+            <span data-testid="lobby-room-code">{displayRoomCode}</span>
           </span>
         </div>
-        <div className="w-[44px]" />
+        <button
+          type="button"
+          className="flex h-11 w-11 items-center justify-center rounded-button text-salem-text-secondary hover:bg-salem-accent-gold/10 hover:text-salem-accent-gold"
+          onClick={handleCopyRoomCode}
+          aria-label="复制房间码"
+          disabled={!displayRoomCode}
+        >
+          {copied ? <Check size={18} /> : <Copy size={18} />}
+        </button>
       </header>
 
       {/* Player grid */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-6">
-        <div className="grid grid-cols-3 gap-4 max-w-xs w-full">
+        <div className="grid grid-cols-3 gap-4 max-w-sm w-full">
           {Array.from({ length: MAX_PLAYERS }, (_, i) => (
             <div key={i} className="flex flex-col items-center gap-1">
               <div data-testid={`lobby-seat-${i}`}>{renderSeat(i)}</div>
@@ -96,24 +118,26 @@ export default function Lobby() {
       </div>
 
       {/* Voice control */}
-      <div className="flex items-center justify-center gap-6 px-4 py-3 border-t border-salem-text-secondary/20">
-        <button
-          data-testid="lobby-mic-button"
-          className="flex items-center gap-2 min-h-[44px] min-w-[44px] px-4 py-2 rounded-button bg-salem-bg-secondary disabled:opacity-60 disabled:cursor-not-allowed"
-          onClick={toggleMic}
-          disabled={!connected}
-          aria-label={connected ? (micEnabled ? "关闭麦克风" : "开启麦克风") : "语音不可用"}
-        >
-          {micEnabled && connected ? (
-            <Mic size={20} className="text-salem-success" />
-          ) : (
-            <MicOff size={20} className="text-salem-danger" />
-          )}
-          <span data-testid="lobby-voice-status" className="text-sm">
-            {connected ? (micEnabled ? "麦克风开" : "麦克风关") : voiceStatus === "unconfigured" ? "语音未配置" : "语音未连接"}
-          </span>
-        </button>
-      </div>
+      {voiceVisible && (
+        <div className="flex items-center justify-center gap-6 px-4 py-3 border-t border-salem-text-secondary/20">
+          <button
+            data-testid="lobby-mic-button"
+            className="flex items-center gap-2 min-h-[44px] min-w-[44px] px-4 py-2 rounded-button bg-salem-bg-secondary disabled:opacity-60 disabled:cursor-not-allowed"
+            onClick={toggleMic}
+            disabled={!connected}
+            aria-label={connected ? (micEnabled ? "关闭麦克风" : "开启麦克风") : "语音连接中"}
+          >
+            {micEnabled && connected ? (
+              <Mic size={20} className="text-salem-success" />
+            ) : (
+              <MicOff size={20} className="text-salem-danger" />
+            )}
+            <span data-testid="lobby-voice-status" className="text-sm">
+              {connected ? (micEnabled ? "麦克风开" : "麦克风关") : "语音连接中"}
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Bottom actions */}
       <div className="px-4 pb-4 safe-area-bottom space-y-3">
@@ -183,7 +207,7 @@ function SeatAvatar({ player, isCurrentUser }: { player: PlayerState; isCurrentU
           <Crown size={14} className="absolute -top-1 -right-1 text-salem-warning" />
         )}
       </div>
-      <span className="text-xs text-salem-text-secondary truncate max-w-[64px]">
+      <span className="max-w-24 break-words [overflow-wrap:anywhere] text-center text-xs leading-tight text-salem-text-secondary" title={player.name}>
         {player.name}
       </span>
       {player.isReady && (
