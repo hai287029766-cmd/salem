@@ -54,10 +54,11 @@ export default function Lobby() {
     sendMessage({ type: "start_game", coordinatorId: coordinatorId || undefined });
   }, [sendMessage, coordinatorId]);
 
-  const handleCopyRoomCode = useCallback(async () => {
+  const handleCopyInviteLink = useCallback(async () => {
     if (!displayRoomCode) return;
+    const inviteUrl = `${window.location.origin}/?room=${displayRoomCode}`;
     try {
-      await navigator.clipboard.writeText(displayRoomCode);
+      await navigator.clipboard.writeText(inviteUrl);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
@@ -98,8 +99,9 @@ export default function Lobby() {
         <button
           type="button"
           className="flex h-11 w-11 items-center justify-center rounded-button text-salem-text-secondary hover:bg-salem-accent-gold/10 hover:text-salem-accent-gold"
-          onClick={handleCopyRoomCode}
-          aria-label="复制房间码"
+          onClick={handleCopyInviteLink}
+          aria-label="复制邀请链接"
+          title="复制邀请链接"
           disabled={!displayRoomCode}
         >
           {copied ? <Check size={18} /> : <Copy size={18} />}
@@ -141,6 +143,17 @@ export default function Lobby() {
 
       {/* Bottom actions */}
       <div className="px-4 pb-4 safe-area-bottom space-y-3">
+        <button
+          type="button"
+          data-testid="lobby-copy-invite-button"
+          className="btn-secondary w-full gap-2"
+          onClick={handleCopyInviteLink}
+          disabled={!displayRoomCode}
+        >
+          {copied ? <Check size={18} /> : <Copy size={18} />}
+          {copied ? "已复制邀请链接" : "复制邀请链接给朋友"}
+        </button>
+
         <div className="flex items-center justify-between text-sm text-salem-text-secondary">
           <div className="flex items-center gap-1">
             <Users size={16} />

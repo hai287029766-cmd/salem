@@ -1,15 +1,20 @@
 import { useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { BookOpen } from "lucide-react";
 import { useColyseus } from "../hooks/useColyseus";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { ROOM_CODE_LENGTH } from "@salem/shared";
 
+function normalizeRoomCode(value: string | null): string {
+  return (value || "").toUpperCase().replace(/[^A-Z2-9]/g, "").slice(0, ROOM_CODE_LENGTH);
+}
+
 export default function Home() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { createRoom, joinRoom, connecting, error } = useColyseus();
   const [nickname, setNickname] = useState("");
-  const [roomCode, setRoomCode] = useState("");
+  const [roomCode, setRoomCode] = useState(() => normalizeRoomCode(searchParams.get("room")));
   const [showRules, setShowRules] = useState(false);
 
   const handleCreate = useCallback(async () => {
@@ -69,7 +74,7 @@ export default function Home() {
           onClick={handleCreate}
           disabled={!nickname.trim() || connecting}
         >
-          创建房间
+          创建新房间
         </button>
 
         {/* Divider */}
@@ -81,23 +86,31 @@ export default function Home() {
 
         {/* Join room */}
         <div className="w-full flex flex-col gap-3">
+          {roomCode.length === ROOM_CODE_LENGTH && (
+            <p className="text-center text-xs text-salem-accent-gold">
+              准备加入房间 {roomCode}
+            </p>
+          )}
           <input
             data-testid="home-room-code-input"
             type="text"
             className="input-field text-center tracking-[0.3em] uppercase"
             placeholder="输入房间码"
             value={roomCode}
-            onChange={(e) => setRoomCode(e.target.value.toUpperCase().slice(0, ROOM_CODE_LENGTH))}
+            onChange={(e) => setRoomCode(normalizeRoomCode(e.target.value))}
             maxLength={ROOM_CODE_LENGTH}
           />
           <button
             data-testid="home-join-room-button"
-            className="btn-secondary w-full"
+            className={`${roomCode.length === ROOM_CODE_LENGTH ? "btn-primary" : "btn-secondary"} w-full`}
             onClick={handleJoin}
             disabled={!nickname.trim() || roomCode.length !== ROOM_CODE_LENGTH || connecting}
           >
-            加入房间
+            加入已有房间
           </button>
+          <p className="text-center text-[11px] leading-relaxed text-salem-text-ink">
+            加入朋友的房间时，输入昵称和房间码后点击“加入已有房间”。
+          </p>
         </div>
 
         {/* Error display */}

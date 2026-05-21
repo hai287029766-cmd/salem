@@ -407,6 +407,7 @@ export class GameEngine {
 
     if (isProtected) {
       this.addLog(`${target.name} 受到警长的保护`);
+      this.notifyAll(`${target.name}受到警长保护，女巫袭击失败`);
       this.broadcast("sound_effect", { sound: "card_flip" });
       const constable = this.getAlivePlayers().find((p) => p.isConstable);
       if (constable) {
@@ -414,8 +415,10 @@ export class GameEngine {
       }
     } else if (hasConfessed) {
       this.addLog(`${target.name} 认罪并渡过夜晚`);
+      this.notifyAll(`${target.name}因认罪渡过了夜晚`);
     } else if (hasAsylum) {
       this.addLog(`${target.name} 受到庇护的保护`);
+      this.notifyAll(`${target.name}受到庇护保护，女巫袭击失败`);
     } else {
       this.killPlayer(targetId, "夜间被女巫杀害");
       this.broadcast("sound_effect", { sound: "witch_kill" });
@@ -680,6 +683,7 @@ export class GameEngine {
     this.witchVotes.set(playerId, targetId);
     this.witchConfirmed.add(playerId);
     this.broadcastWitchVoteState();
+    this.notifyPlayer(playerId, `你已确认击杀目标：${target.name}`);
 
     const aliveWitches = this.getAlivePlayers().filter((p) => p.hasBeenWitch);
     const allConfirmed = aliveWitches.every((w) => this.witchConfirmed.has(w.id));
@@ -718,6 +722,11 @@ export class GameEngine {
 
     this.witchConfirmed.add(playerId);
     this.broadcastWitchVoteState();
+    const targetId = this.witchVotes.get(playerId);
+    const target = targetId ? this.state.players.get(targetId) : undefined;
+    if (target) {
+      this.notifyPlayer(playerId, `你已确认击杀目标：${target.name}`);
+    }
 
     const aliveWitches = this.getAlivePlayers().filter((p) => p.hasBeenWitch);
     const allConfirmed = aliveWitches.every((w) => this.witchConfirmed.has(w.id));
@@ -852,6 +861,8 @@ export class GameEngine {
     this.syncTryalCards(playerId);
 
     this.addLog(`${player.name} 认罪并翻开一张身份牌`);
+    this.notifyAll(`${player.name}认罪并翻开了一张身份牌`);
+    this.notifyPlayer(playerId, "你已认罪，本夜若被女巫选中将免于死亡");
 
     this.broadcast("card_revealed", {
       playerId,
@@ -894,6 +905,7 @@ export class GameEngine {
     if (this.declinedConfessPlayerIds.has(playerId)) return false;
 
     this.declinedConfessPlayerIds.add(playerId);
+    this.notifyPlayer(playerId, "你已选择不认罪");
 
     const aliveCount = this.getAlivePlayers().length;
     const decidedCount = this.confessedPlayerIds.size + this.declinedConfessPlayerIds.size;
@@ -921,6 +933,7 @@ export class GameEngine {
     if (card.faceUp) return false; // Must take a face-down card from the left player.
 
     this.conspiracyChoices.set(playerId, cardIndex);
+    this.notifyPlayer(playerId, `你已从${this.state.players.get(leftPlayerId)?.name ?? "左手边玩家"}处选择一张未公开身份牌`);
 
     // Check if all alive players have chosen
     const alivePlayers = this.getAlivePlayers();
@@ -957,6 +970,8 @@ export class GameEngine {
 
     const tryalTypeCn = card.type === "witch" ? "女巫" : card.type === "constable" ? "警长" : "镇民";
     this.addLog(`${target.name}的一张身份牌被翻开：${tryalTypeCn}`);
+    const chooser = this.state.players.get(playerId);
+    this.notifyAll(`${chooser?.name ?? "有玩家"}翻开了${target.name}的一张身份牌：${tryalTypeCn}`);
 
     this.broadcast("card_revealed", {
       playerId: targetId,
@@ -1197,6 +1212,7 @@ export class GameEngine {
         // Check accusation threshold
         const charName = target.characterName as CharacterName;
         const threshold = getAccusationThreshold(charName, target.hasPiety);
+        this.notifyAll(`${player.name}对${target.name}打出${def.nameCn}，指控累计 ${target.accusationPoints}/${threshold}`);
 
         // Thomas Danforth early trigger at 6 pts
         if (player.characterName === "thomas_danforth") {
@@ -1226,6 +1242,7 @@ export class GameEngine {
 
           const charName = target.characterName as CharacterName;
           const threshold = getAccusationThreshold(charName, target.hasPiety);
+          this.notifyAll(`${player.name}将不在场证明作为证人卡打给${target.name}，指控累计 ${target.accusationPoints}/${threshold}`);
           if (target.accusationPoints >= threshold) {
             this.triggerTryal(targetId);
           }
@@ -1243,6 +1260,7 @@ export class GameEngine {
           target.accusationPoints = 0;
 
           this.addLog(`${player.name} 对${target.name}打出不在场证明 -- 所有指控已移除`);
+          this.notifyAll(`${player.name}为${target.name}移除了所有指控`);
         }
 
         this.deck.discard([card]);
@@ -1257,6 +1275,7 @@ export class GameEngine {
         this.frontCards.set(targetId, front);
 
         this.addLog(`${player.name} 将${target.name}关入枷锁`);
+        this.notifyAll(`${player.name}将${target.name}关入枷锁`);
         break;
       }
 
@@ -1280,6 +1299,10 @@ export class GameEngine {
           this.addLog(
             `${player.name} 使用抢劫：从${target.name}处拿取一张卡牌并交给${secondaryTarget.name}`
           );
+          this.notifyAll(`${player.name}使用抢劫：从${target.name}处拿取一张卡牌并交给${secondaryTarget.name}`);
+        } else {
+          this.addLog(`${player.name} 使用抢劫，但${target.name}没有可拿取的手牌`);
+          this.notifyAll(`${player.name}使用抢劫，但${target.name}没有可拿取的手牌`);
         }
 
         this.deck.discard([card]);
@@ -1311,6 +1334,7 @@ export class GameEngine {
         this.addLog(
           `${player.name} 使用替罪羊：将${target.name}面前的所有卡牌转移给${secondaryTarget.name}`
         );
+        this.notifyAll(`${player.name}使用替罪羊：将${target.name}面前的所有卡牌转移给${secondaryTarget.name}`);
 
         const receiverCharName = secondaryTarget.characterName as CharacterName;
         const receiverThreshold = getAccusationThreshold(receiverCharName, secondaryTarget.hasPiety);
@@ -1357,6 +1381,7 @@ export class GameEngine {
         }
 
         this.addLog(`${player.name} 对${target.name}使用诅咒 -- 蓝色卡牌已移除`);
+        this.notifyAll(`${player.name}对${target.name}使用诅咒，蓝色卡牌已移除`);
         this.deck.discard([card]);
         break;
       }
@@ -1368,6 +1393,7 @@ export class GameEngine {
         this.frontCards.set(targetId, front);
 
         this.addLog(`${player.name} 给予${target.name}虔诚`);
+        this.notifyAll(`${player.name}给予${target.name}虔诚`);
         break;
       }
 
@@ -1378,6 +1404,7 @@ export class GameEngine {
         this.frontCards.set(targetId, front);
 
         this.addLog(`${player.name} 给予${target.name}庇护`);
+        this.notifyAll(`${player.name}给予${target.name}庇护`);
         break;
       }
 
@@ -1388,6 +1415,8 @@ export class GameEngine {
         this.frontCards.set(targetId, front);
 
         this.matchmakerHolders.push(targetId);
+        this.addLog(`${player.name} 给予${target.name}红线`);
+        this.notifyAll(`${player.name}给予${target.name}红线`);
 
         // If two matchmaker holders, link them
         if (this.matchmakerHolders.length === 2) {
@@ -1404,12 +1433,14 @@ export class GameEngine {
             }
             this.matchmakerHolders = [];
             this.addLog("两张红线卡都在同一玩家身上 -- 已弃掉");
+            this.notifyAll("两张红线卡都在同一玩家身上，红线已弃掉");
           } else {
             const firstPlayer = this.state.players.get(first);
             const secondPlayer = this.state.players.get(second);
             if (firstPlayer) firstPlayer.matchmakerPartnerId = second;
             if (secondPlayer) secondPlayer.matchmakerPartnerId = first;
             this.addLog(`${firstPlayer?.name}和${secondPlayer?.name}现已通过红线卡绑定`);
+            this.notifyAll(`${firstPlayer?.name}和${secondPlayer?.name}现已通过红线卡绑定`);
           }
         }
         break;
@@ -1521,26 +1552,28 @@ export class GameEngine {
       )
       .sort((a, b) => b.cardIndex - a.cardIndex);
 
-    const claimedCards: Array<{ receiverId: string; card: TryalCard }> = [];
+    const claimedCards: Array<{ receiverId: string; sourceId: string; card: TryalCard }> = [];
 
     for (const claim of claims) {
       const cards = this.tryalCardMap.get(claim.sourceId) ?? [];
       if (claim.cardIndex >= 0 && claim.cardIndex < cards.length && !cards[claim.cardIndex].faceUp) {
         const removed = cards.splice(claim.cardIndex, 1)[0];
-        claimedCards.push({ receiverId: claim.receiverId, card: removed });
+        claimedCards.push({ receiverId: claim.receiverId, sourceId: claim.sourceId, card: removed });
       } else {
         const fallbackIndex = cards.findIndex((card) => !card.faceUp);
         if (fallbackIndex !== -1) {
           const removed = cards.splice(fallbackIndex, 1)[0];
-          claimedCards.push({ receiverId: claim.receiverId, card: removed });
+          claimedCards.push({ receiverId: claim.receiverId, sourceId: claim.sourceId, card: removed });
         }
       }
     }
 
-    for (const { receiverId, card } of claimedCards) {
+    for (const { receiverId, sourceId, card } of claimedCards) {
       const receiverCards = this.tryalCardMap.get(receiverId) ?? [];
       receiverCards.push({ ...card, faceUp: false });
       this.tryalCardMap.set(receiverId, receiverCards);
+      this.notifyPlayer(receiverId, "阴谋结算：你获得了一张身份牌");
+      this.notifyPlayer(sourceId, "阴谋结算：你的一张身份牌被拿走");
     }
 
     for (const playerId of aliveInOrder) {
@@ -1559,6 +1592,7 @@ export class GameEngine {
           const typeCn = catCards[firstFaceDown].type === "witch" ? "女巫"
             : catCards[firstFaceDown].type === "constable" ? "警长" : "镇民";
           this.addLog(`黑猫效果 -- ${catHolder.name}的一张身份牌被翻开：${typeCn}`);
+          this.notifyAll(`黑猫效果：${catHolder.name}的一张身份牌被翻开：${typeCn}`);
           this.broadcast("card_revealed", {
             playerId: this.state.blackCatOwnerId,
             cardType: catCards[firstFaceDown].type,
@@ -1583,6 +1617,7 @@ export class GameEngine {
     }
 
     this.addLog("阴谋已结算 -- 身份牌已交换");
+    this.notifyAll("阴谋已结算，身份牌已交换");
 
     // Check win conditions
     const winResult = this.checkWin();
@@ -1625,6 +1660,7 @@ export class GameEngine {
     }
 
     this.addLog(`黑猫已放置在${target.name}身上`);
+    this.notifyAll(`黑猫已放置在${target.name}身上`);
   }
 
   private killPlayer(playerId: string, reason: string): void {
@@ -1870,6 +1906,14 @@ export class GameEngine {
       isConstable: player.isConstable,
       witchPartners: player.hasBeenWitch ? witchPartners : [],
     });
+  }
+
+  private notifyPlayer(playerId: string, message: string): void {
+    this.sendToPlayer(playerId, "player_notice", { message });
+  }
+
+  private notifyAll(message: string): void {
+    this.broadcast("player_notice", { message });
   }
 
   private syncHandCount(player: Player): void {

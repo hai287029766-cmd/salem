@@ -207,6 +207,15 @@ async function firstOtherSeat(page: Page): Promise<string> {
   throw new Error("No selectable target seat found");
 }
 
+test("邀请链接会预填房间码并引导加入已有房间", async ({ page }) => {
+  await page.goto("/?room=AB3K7M");
+
+  await expect(page.getByTestId("home-room-code-input")).toHaveValue("AB3K7M");
+  await expect(page.getByText("准备加入房间 AB3K7M")).toBeVisible();
+  await expect(page.getByTestId("home-create-room-button")).toContainText("创建新房间");
+  await expect(page.getByTestId("home-join-room-button")).toContainText("加入已有房间");
+});
+
 test("语音未配置稳定降级，4 人建房、加入、准备、开始不被阻塞", async ({ browser }) => {
   const { players } = await startFourPlayerGame(browser);
 
@@ -336,9 +345,10 @@ test("角色能力入口可点击并向服务端发送技能动作", async ({ br
     const actor = await currentPlayer(players);
     await expect(actor.page.getByTestId("game-role-skill-button")).toBeVisible();
     await actor.page.getByTestId("game-role-skill-button").click();
-    await expect(
-      actor.page.getByTestId("game-log").or(actor.page.getByText("提图芭 -- 重排牌堆"))
-    ).toContainText(/使用|技能|被动|查看|抽取|选择.*死亡|弃牌堆|重排牌堆/i, { timeout: 5_000 });
+    const skillFeedback = actor.page
+      .getByText(/提图芭 -- 重排牌堆|使用|技能|被动|查看|抽取|选择.*死亡|弃牌堆|重排牌堆/i)
+      .first();
+    await expect(skillFeedback).toBeVisible({ timeout: 5_000 });
   } finally {
     await closePlayers(players);
   }

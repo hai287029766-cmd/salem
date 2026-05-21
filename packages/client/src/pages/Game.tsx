@@ -140,6 +140,15 @@ export default function Game() {
     if (lastEvent?.type === "protection_result") {
       pushToast(lastEvent.saved ? `你的保护拯救了 ${lastEvent.targetName}` : `已保护 ${lastEvent.targetName}`);
     }
+    if (lastEvent?.type === "player_notice") {
+      pushToast(lastEvent.message);
+    }
+    if (lastEvent?.type === "player_killed") {
+      pushToast(`${lastEvent.playerName} 死亡：${lastEvent.reason}`);
+    }
+    if (lastEvent?.type === "character_skill_result" && lastEvent.message) {
+      pushToast(lastEvent.message);
+    }
     if (lastEvent?.type === "action_rejected") {
       pushToast(lastEvent.message);
     }
@@ -295,8 +304,7 @@ export default function Game() {
 
   const handleDeclineConfess = useCallback(() => {
     sendMessage({ type: "decline_confess" });
-    pushToast("已选择不认罪");
-  }, [sendMessage, pushToast]);
+  }, [sendMessage]);
 
   const confirmConfess = useCallback(() => {
     if (selectedConfessIndex >= 0) {
@@ -674,6 +682,9 @@ function RoleRevealOverlay({
   const identityIcon = roleInfo.isWitch
     ? <Flame size={28} className="text-[#c090e0]" />
     : <Users size={28} className="text-salem-townfolk" />;
+  const objective = roleInfo.isWitch
+    ? "隐藏女巫身份，在夜间协同行动，消灭非女巫玩家。"
+    : "白天通过指控与审判，翻出所有女巫身份牌。";
 
   return (
     <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/75 px-5 backdrop-blur-sm">
@@ -698,6 +709,14 @@ function RoleRevealOverlay({
           <p className="font-heading text-sm text-salem-accent-gold">{characterLabel || characterName}</p>
           <p className="mt-1 text-xs leading-relaxed text-salem-text-secondary">
             {characterAbility || "该角色能力由规则引擎自动结算。"}
+          </p>
+        </div>
+
+        <div className="mt-3 rounded-card border border-salem-accent-gold/12 bg-black/18 p-3 text-left">
+          <p className="font-heading text-xs text-salem-text-bright">本局目标</p>
+          <p className="mt-1 text-xs leading-relaxed text-salem-text-secondary">{objective}</p>
+          <p className="mt-2 text-[11px] leading-relaxed text-salem-text-ink">
+            每名玩家持有多张隐藏身份牌；身份牌全部翻开时，该玩家死亡。
           </p>
         </div>
 

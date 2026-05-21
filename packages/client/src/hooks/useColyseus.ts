@@ -78,7 +78,7 @@ async function waitForRoomCode(room: Room): Promise<string> {
 async function resolveRoomId(roomCode: string): Promise<string> {
   const response = await fetch(`${getApiBaseUrl()}/api/rooms/${encodeURIComponent(roomCode)}`);
   if (!response.ok) {
-    throw new Error("房间不存在或已关闭");
+    throw new Error("房间不存在或已关闭。请确认你和房主打开的是同一个网址，并且房主仍在房间内。");
   }
 
   const payload = (await response.json()) as { data?: { roomId?: string } };
@@ -145,6 +145,11 @@ export function useColyseus(): UseColyseusReturn {
       const roomId = await resolveRoomId(normalizedRoomCode);
       const reconnectToken = sessionStorage.getItem(`salem_reconnect_${normalizedRoomCode}`) || undefined;
       const joinedRoom = await client.joinById(roomId, { name, roomCode: normalizedRoomCode, reconnectToken });
+      const joinedRoomCode = (await waitForRoomCode(joinedRoom)).toUpperCase();
+      if (joinedRoomCode !== normalizedRoomCode) {
+        joinedRoom.leave(true);
+        throw new Error(`加入到了不同房间（${joinedRoomCode}），请刷新后重新输入房间码`);
+      }
       sessionStorage.setItem("salem_nickname", name);
       sessionStorage.setItem("salem_room_code", normalizedRoomCode);
       setActiveRoom(joinedRoom, normalizedRoomCode);

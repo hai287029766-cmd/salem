@@ -47,6 +47,7 @@ export type ServerEvent =
   | { type: "draw_result"; count: number }
   | { type: "role_changed"; gained?: string; lost?: string; message: string }
   | { type: "protection_result"; saved: boolean; targetName?: string }
+  | { type: "player_notice"; message: string }
   | { type: "action_rejected"; message: string };
 
 export type SoundType =

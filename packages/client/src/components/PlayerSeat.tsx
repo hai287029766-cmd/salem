@@ -114,6 +114,7 @@ export default function PlayerSeat({
           </div>
 
           {/* Compact status badges */}
+          <CompactHandBadge count={player.handCardCount} testId={testId ? `${testId}-compact-hand-count` : undefined} />
           <CompactStatusBadges player={player} />
 
           {/* Expand arrow */}
@@ -407,6 +408,20 @@ function StatPill({
         {value}
       </span>
       <span className="text-[10px] text-salem-text-ink">{label}</span>
+    </div>
+  );
+}
+
+function CompactHandBadge({ count, testId }: { count: number; testId?: string }) {
+  return (
+    <div
+      data-testid={testId}
+      className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center gap-0.5 rounded-full border border-salem-accent-gold/20 bg-black/25 px-1.5 text-[10px] font-heading text-salem-accent-gold"
+      title={`手牌 ${count} 张`}
+      aria-label={`手牌 ${count} 张`}
+    >
+      <Layers size={11} />
+      <span>{count}</span>
     </div>
   );
 }
