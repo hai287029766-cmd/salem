@@ -216,6 +216,26 @@ test("邀请链接会预填房间码并引导加入已有房间", async ({ page 
   await expect(page.getByTestId("home-join-room-button")).toContainText("加入已有房间");
 });
 
+test("复制邀请链接失败时显示可手动复制的链接", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: () => Promise.reject(new Error("blocked")) },
+      configurable: true,
+    });
+    Object.defineProperty(document, "execCommand", {
+      value: () => false,
+      configurable: true,
+    });
+  });
+
+  await openHome(page, "Host");
+  const roomCode = await createRoom(page);
+  await page.getByTestId("lobby-copy-invite-button").click();
+
+  await expect(page.getByTestId("lobby-invite-manual")).toBeVisible();
+  await expect(page.getByTestId("lobby-invite-manual")).toContainText(`/?room=${roomCode}`);
+});
+
 test("语音未配置稳定降级，4 人建房、加入、准备、开始不被阻塞", async ({ browser }) => {
   const { players } = await startFourPlayerGame(browser);
 

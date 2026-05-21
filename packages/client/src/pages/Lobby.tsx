@@ -7,6 +7,43 @@ import { useVoiceConnection } from "../hooks/useVoiceConnection";
 import { MIN_PLAYERS, MAX_PLAYERS } from "@salem/shared";
 import type { Room } from "colyseus.js";
 
+type CopyStatus = "idle" | "success" | "manual";
+
+function getInviteUrl(roomCode: string) {
+  return `${window.location.origin}/?room=${roomCode}`;
+}
+
+async function copyText(text: string): Promise<boolean> {
+  if (navigator.clipboard?.writeText && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fall through to the legacy path. Mobile browsers can reject clipboard
+      // writes even when the API exists.
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+
+  try {
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
 export default function Lobby() {
   const { roomCode } = useParams<{ roomCode: string }>();
   const navigate = useNavigate();
@@ -14,7 +51,7 @@ export default function Lobby() {
   const [room, setRoom] = useState<Room | null>(activeRoom);
   const { state, myId } = useGameState(room);
   const [coordinatorId, setCoordinatorId] = useState<string>("");
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
 
   useEffect(() => {
     if (activeRoom && activeRoom !== room) {
@@ -44,6 +81,7 @@ export default function Lobby() {
   const allReady = players.filter((p) => !p.isHost).every((p) => p.isReady);
   const canStart = isHost && players.length >= MIN_PLAYERS && allReady;
   const displayRoomCode = state?.roomCode || roomCode || "";
+  const inviteUrl = displayRoomCode ? getInviteUrl(displayRoomCode) : "";
   const voiceVisible = connected || voiceStatus === "connecting";
 
   const handleReady = useCallback(() => {
@@ -56,14 +94,13 @@ export default function Lobby() {
 
   const handleCopyInviteLink = useCallback(async () => {
     if (!displayRoomCode) return;
-    const inviteUrl = `${window.location.origin}/?room=${displayRoomCode}`;
-    try {
-      await navigator.clipboard.writeText(inviteUrl);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setCopied(false);
+    const copied = await copyText(getInviteUrl(displayRoomCode));
+    if (copied) {
+      setCopyStatus("success");
+      window.setTimeout(() => setCopyStatus("idle"), 1800);
+      return;
     }
+    setCopyStatus("manual");
   }, [displayRoomCode]);
 
   const renderSeat = (index: number) => {
@@ -104,7 +141,7 @@ export default function Lobby() {
           title="复制邀请链接"
           disabled={!displayRoomCode}
         >
-          {copied ? <Check size={18} /> : <Copy size={18} />}
+          {copyStatus === "success" ? <Check size={18} /> : <Copy size={18} />}
         </button>
       </header>
 
@@ -150,9 +187,24 @@ export default function Lobby() {
           onClick={handleCopyInviteLink}
           disabled={!displayRoomCode}
         >
-          {copied ? <Check size={18} /> : <Copy size={18} />}
-          {copied ? "已复制邀请链接" : "复制邀请链接给朋友"}
+          {copyStatus === "success" ? <Check size={18} /> : <Copy size={18} />}
+          {copyStatus === "success" ? "已复制邀请链接" : copyStatus === "manual" ? "复制失败，长按下方链接" : "复制邀请链接给朋友"}
         </button>
+
+        {copyStatus === "manual" && inviteUrl && (
+          <div
+            data-testid="lobby-invite-manual"
+            className="rounded-card border border-salem-accent-gold/25 bg-salem-bg-secondary/80 px-3 py-2"
+          >
+            <p className="mb-1 text-xs text-salem-text-secondary">当前浏览器限制自动复制，请长按复制邀请链接</p>
+            <a
+              href={inviteUrl}
+              className="block select-all break-all text-sm leading-relaxed text-salem-accent-gold"
+            >
+              {inviteUrl}
+            </a>
+          </div>
+        )}
 
         <div className="flex items-center justify-between text-sm text-salem-text-secondary">
           <div className="flex items-center gap-1">
